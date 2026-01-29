@@ -3,7 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { invoke } from '@tauri-apps/api/core';
-// import { open } from '@tauri-apps/plugin-opener';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Holding } from '../types';
 import activeEtfInfos from '../data/activeetfinfos.json';
 import HoldingsTable from './HoldingsTable';
@@ -351,8 +351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
         const url = manager.view_url.replace('{$}', idVal);
         try {
-            // await open(url);
-            addLog(`Opened browser: ${url} (Mock)`, 'info');
+            await openUrl(url);
         } catch (e) {
             addLog(`Failed to open browser: ${e}`, 'error');
         }
