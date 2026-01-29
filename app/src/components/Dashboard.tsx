@@ -19,6 +19,11 @@ interface LogItem {
     time: string;
     type: 'info' | 'success' | 'error' | 'analysis';
     message: string;
+    analysisData?: {
+        range: string;
+        inList: { name: string; display: string }[];
+        outList: { name: string; display: string }[];
+    };
 }
 
 const COLOR_PALETTE = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
@@ -81,12 +86,24 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         });
         if (relevantDates.length === 0) return [];
 
-        const latestDate = relevantDates[relevantDates.length - 1];
-        const latestHoldings = holdings.filter(h => h.date === latestDate);
-        return latestHoldings
-            .sort((a, b) => b.weight - a.weight)
-            .slice(0, parseInt(topN === 'all' ? '100' : topN))
-            .map(h => h.name);
+        // Create a map of Stock -> Max Weight in this period for sorting
+        const stockMaxWeights = new Map<string, number>();
+
+        holdings.forEach(h => {
+            // Only consider holdings within the relevant date range
+            if (relevantDates.includes(h.date)) {
+                const currentMax = stockMaxWeights.get(h.name) || 0;
+                if (h.weight > currentMax) {
+                    stockMaxWeights.set(h.name, h.weight);
+                }
+            }
+        });
+
+        // Convert to array and sort by max weight
+        const sortedStocks = Array.from(stockMaxWeights.keys())
+            .sort((a, b) => (stockMaxWeights.get(b) || 0) - (stockMaxWeights.get(a) || 0));
+
+        return sortedStocks.slice(0, parseInt(topN === 'all' ? '100' : topN));
     }, [holdings, topN, viewStartDate, viewEndDate]);
 
     const toggleSeries = (name: string) => {
@@ -183,10 +200,10 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     setViewEndDate(new Date(lastDate));
                     if (dates.length > 0) {
                         const first = new Date(dates[0]);
-                        // logic to set start date to ~1 month ago if possible, else first date
-                        const oneMonthAgo = new Date(lastDate);
-                        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-                        setViewStartDate(oneMonthAgo < first ? first : oneMonthAgo);
+                        // logic to set start date to ~1 week ago if possible, else first date
+                        const oneWeekAgo = new Date(lastDate);
+                        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                        setViewStartDate(oneWeekAgo < first ? first : oneWeekAgo);
                     }
                 }
             }
@@ -307,36 +324,60 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         const startMap = new Map(startHoldings.map(h => [h.name, h.weight]));
         const endMap = new Map(endHoldings.map(h => [h.name, h.weight]));
 
-        const inStocks: string[] = [];
-        const outStocks: string[] = [];
-        const upStocks: string[] = [];
-        const downStocks: string[] = [];
+        // Pre-calculate date structure for event finding
+        const rangeHoldings = holdings.filter(h => h.date >= startStr && h.date <= endStr);
+        const sortedRangeDates = Array.from(new Set(rangeHoldings.map(h => h.date))).sort();
+        const dateToStocks = new Map<string, Set<string>>();
 
-        // Check for In and Weight Change
+        // Initialize sets for all dates (to ensure strict checking of existence)
+        sortedRangeDates.forEach(d => dateToStocks.set(d, new Set()));
+
+        rangeHoldings.forEach(h => {
+            dateToStocks.get(h.date)?.add(h.name);
+        });
+
+        const inStocks: { name: string; display: string }[] = [];
+        const outStocks: { name: string; display: string }[] = [];
+
+        // Check for In
         endHoldings.forEach(h => {
             if (!startMap.has(h.name)) {
-                inStocks.push(`${h.name} (${h.weight}%)`);
-            } else {
-                const startWeight = startMap.get(h.name)!;
-                const diff = h.weight - startWeight;
-                if (diff > 0) upStocks.push(`${h.name} (+${diff.toFixed(2)}%)`);
-                else if (diff < 0) downStocks.push(`${h.name} (${diff.toFixed(2)}%)`);
+                // Find first date present
+                const firstAppearDate = sortedRangeDates.find(d => dateToStocks.get(d)?.has(h.name));
+                const dateDisplay = firstAppearDate ? firstAppearDate.slice(5) : '??-??'; // 2023-01-01 -> 01-01
+                inStocks.push({ name: h.name, display: `${h.name} (${dateDisplay})` });
             }
         });
 
         // Check for Out
         startHoldings.forEach(h => {
             if (!endMap.has(h.name)) {
-                outStocks.push(`${h.name} (${h.weight}%)`);
+                // Find first date missing (after start)
+                const firstMissingIndex = sortedRangeDates.findIndex(d => !dateToStocks.get(d)?.has(h.name));
+                // If it's missing at index i, it was present at i-1.
+                // Since it's in startHoldings (index 0), firstMissingIndex should be > 0.
+                let lastPresentDate = '??-??';
+                if (firstMissingIndex > 0) {
+                    lastPresentDate = sortedRangeDates[firstMissingIndex - 1];
+                } else if (firstMissingIndex === -1) {
+                    // Should not happen if it's missing in endMap (unless endStr isn't in sortedRangeDates?)
+                    // Fallback to startStr or similar
+                    lastPresentDate = startStr;
+                }
+
+                const dateDisplay = lastPresentDate.slice(5);
+                outStocks.push({ name: h.name, display: `${h.name} (${dateDisplay})` });
             }
         });
 
-        addLog(`Analysis (${startStr} vs ${endStr})`, 'analysis');
-        if (inStocks.length) addLog(`[IN] ${inStocks.join(', ')}`, 'success');
-        if (outStocks.length) addLog(`[OUT] ${outStocks.join(', ')}`, 'error');
-        // Optional: Log weight changes if needed, but user emphasized In/Out
-        // if (upStocks.length) addLog(`[UP] ${upStocks.join(', ')}`, 'info');
-        // if (downStocks.length) addLog(`[DOWN] ${downStocks.join(', ')}`, 'info');
+        // Add structured log
+        const range = `${startStr} ~ ${endStr}`;
+        setLogs(prev => [...prev, {
+            time: new Date().toLocaleTimeString(),
+            type: 'analysis',
+            message: `Analysis Complete (${range})`,
+            analysisData: { range, inList: inStocks, outList: outStocks }
+        }]);
     };
 
     // Series Names & Toggle Logic Moved Up
@@ -718,19 +759,90 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             }}>
                 <div style={{ padding: '15px', height: '100%', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
                     {logs.length === 0 && <div style={{ color: '#475569', textAlign: 'center', marginTop: '20px' }}>Metrics and logs will appear here...</div>}
-                    {logs.map((log, idx) => (
-                        <div key={idx} style={{ marginBottom: '8px', display: 'flex', lineHeight: '1.4' }}>
-                            <span style={{ color: '#64748b', marginRight: '10px', minWidth: '80px', flexShrink: 0 }}>[{log.time}]</span>
-                            <span style={{
-                                color: log.type === 'error' ? '#ef4444' :
-                                    log.type === 'success' ? '#10b981' :
-                                        log.type === 'analysis' ? '#f59e0b' : '#e2e8f0',
-                                wordBreak: 'break-all'
-                            }}>
-                                {log.message}
-                            </span>
-                        </div>
-                    ))}
+                    {logs.map((log, idx) => {
+                        if (log.type === 'analysis' && log.analysisData) {
+                            return (
+                                <div key={idx} style={{
+                                    marginBottom: '10px',
+                                    padding: '10px',
+                                    background: 'rgba(30, 41, 59, 0.6)',
+                                    borderRadius: '8px',
+                                    borderLeft: '4px solid #8b5cf6', // Violet accent
+                                    borderTop: '1px solid rgba(255,255,255,0.05)',
+                                    borderRight: '1px solid rgba(255,255,255,0.05)',
+                                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem', fontWeight: 600 }}>
+                                        <span style={{ color: '#e2e8f0' }}>{log.message}</span>
+                                        <span style={{ color: '#64748b', fontSize: '0.8rem' }}>{log.time}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '20px', fontSize: '0.85rem' }}>
+                                        {/* IN Section */}
+                                        <div style={{ flex: 1 }}>
+                                            <span style={{ color: '#10b981', fontWeight: 'bold', marginRight: '5px' }}>In:</span>
+                                            {log.analysisData.inList.length === 0 ? <span style={{ color: '#64748b' }}>-</span> : (
+                                                <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                    {log.analysisData.inList.map((item, i) => (
+                                                        <span
+                                                            key={i}
+                                                            onClick={() => isolateSeries(item.name)}
+                                                            style={{
+                                                                color: '#cbd5e1',
+                                                                cursor: 'pointer',
+                                                                textDecoration: 'underline',
+                                                                textDecorationColor: 'rgba(255,255,255,0.2)'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                                                        >
+                                                            {item.display}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* OUT Section */}
+                                        <div style={{ flex: 1 }}>
+                                            <span style={{ color: '#ef4444', fontWeight: 'bold', marginRight: '5px' }}>Out:</span>
+                                            {log.analysisData.outList.length === 0 ? <span style={{ color: '#64748b' }}>-</span> : (
+                                                <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                    {log.analysisData.outList.map((item, i) => (
+                                                        <span
+                                                            key={i}
+                                                            onClick={() => isolateSeries(item.name)}
+                                                            style={{
+                                                                color: '#cbd5e1',
+                                                                cursor: 'pointer',
+                                                                textDecoration: 'underline',
+                                                                textDecorationColor: 'rgba(255,255,255,0.2)'
+                                                            }}
+                                                            onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
+                                                            onMouseLeave={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                                                        >
+                                                            {item.display}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return (
+                            <div key={idx} style={{ marginBottom: '8px', display: 'flex', lineHeight: '1.4', alignItems: 'flex-start' }}>
+                                <span style={{ color: '#64748b', marginRight: '10px', minWidth: '80px', flexShrink: 0 }}>[{log.time}]</span>
+                                <span style={{
+                                    color: log.type === 'error' ? '#ef4444' :
+                                        log.type === 'success' ? '#10b981' :
+                                            log.type === 'analysis' ? '#f59e0b' : '#e2e8f0',
+                                    wordBreak: 'break-all'
+                                }}>
+                                    {log.message}
+                                </span>
+                            </div>
+                        );
+                    })}
                     <div ref={logsEndRef} />
                 </div>
             </div>

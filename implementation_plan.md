@@ -61,6 +61,25 @@
     -   Replace `{$}` with the ID value found in the ETF's arguments (parsing required).
     -   Use `tauri-plugin-opener` (or `shell.open`) to launch the URL.
 
+### Log UI restoration
+#### [MODIFY] [Dashboard.tsx](file:///c:/Users/juno/project/activeetfs/app/src/components/Dashboard.tsx)
+-   **Modify `LogItem` interface**: Add optional `analysisData` field to store structured analysis results (In/Out lists).
+-   **Update `handleAnalyze`**: Instead of formatting strings, pass raw `inStocks` and `outStocks` data to `addLog`.
+-   **Update Log Rendering**:
+    -   Create a specialized view for `type === 'analysis'`.
+    -   Style matches "Analysis Complete" screenshot: dark card, accent border.
+    -   Render "In" (Green) and "Out" (Red) sections.
+    -   Make stock names clickable -> triggers `isolateSeries`.
+
+### Chart Refinements
+#### [MODIFY] [Dashboard.tsx](file:///c:/Users/juno/project/activeetfs/app/src/components/Dashboard.tsx)
+-   **Default View Range**: Change default `viewStartDate` to `targetDate - 7 days` (1 week) instead of 1 month.
+-   **Chart Series Logic**:
+    -   Modify `seriesNames` calculation.
+    -   Instead of `latestHoldings.filter...`, scan **all holdings within the Date Range**.
+    -   Collect all unique series (stocks) that appeared at least once in the range.
+    -   Sort by `max(weight)` or `latest weight` to respect `Top N` limit (will use `max` to ensure transient high-weight stocks are shown).
+
 ### Backend/Build
 #### [NEW] [get_pdfs](file:///c:/Users/juno/project/activeetfs/sidecars/cmd/get_pdfs/main.go)
 -   Build the Go sidecar and place it in `src-tauri/binaries` as `get_pdfs-x86_64-pc-windows-msvc.exe`.
