@@ -3,10 +3,11 @@ package main
 import (
 	"activeetf-sidecar/pkg/scraper"
 	"flag"
+	"io"
 
 	"encoding/json"
 	"fmt"
-	"io"
+
 	"net/http"
 	"net/url"
 	"strconv"
@@ -80,7 +81,7 @@ func main() {
 	var callFunc func(url string, date string, etfCode string) ([]scraper.Holding, error)
 	switch strings.ToLower(*typeParam) {
 	case "kodex": // koact 의 파생
-		callUrl = fmt.Sprintf("https://www.samsungfund.co.kr/api/v1/kodex/product-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
+		callUrl = fmt.Sprintf("https://www.samsungfund.com/api/v1/kodex/product-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
 		callFunc = getKoactHoldings
 	case "koact": // json방식임
 		callUrl = fmt.Sprintf("https://www.samsungactive.co.kr/api/v1/product/etf-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
@@ -116,7 +117,7 @@ func getRISEHoldings(callUrl string, date string, etfCode string) ([]scraper.Hol
 	// POST request with form data
 	formData := url.Values{}
 	formData.Set("searchDate", date)
-	formData.Set("funcCd", gSubparam1)
+	formData.Set("fundCd", gSubparam1)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("POST", callUrl, strings.NewReader(formData.Encode()))
@@ -171,7 +172,16 @@ func getRISEHoldings(callUrl string, date string, etfCode string) ([]scraper.Hol
 		return nil, fmt.Errorf("bad status: %d", res.StatusCode)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// The response is an HTML fragment (tr tags only), which goquery/net/html
+	// might strip if strictly parsed as a document. Wrapping in <table> helps.
+	htmlContent := "<table>" + string(bodyBytes) + "</table>"
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil, err
 	}
