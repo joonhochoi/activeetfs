@@ -191,16 +191,21 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
         window.addEventListener('resize', handleResize);
 
-        bindClickEvent();
+        // Delay binding to ensure chart instance/option is fully ready
+        const bindTimer = setTimeout(() => {
+            bindClickEvent();
+            handleResize(); // Ensure size is correct too
+        }, 300);
+
         // Initial fallback
-        const timer = setTimeout(handleResize, 100);
+        // const timer = setTimeout(handleResize, 100); // Replaced by bindTimer
 
         return () => {
-            clearTimeout(timer);
-            window.removeEventListener('resize', handleResize);
+            clearTimeout(bindTimer);
             if (resizeObserver) {
                 resizeObserver.disconnect();
             }
+            window.removeEventListener('resize', handleResize);
         };
     }, [isLogsOpen, holdings, seriesNames, highlightedSeries, viewStartDate, viewEndDate]);
 
@@ -208,13 +213,18 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         if (etfCode) {
             setInitialAnimationComplete(false); // Reset for new ETF
 
+            // Clean slate for new ETF to prevent ghost data
+            setHoldings([]);
+            setUpdateCandidates(new Set());
+            setAvailableDataDates(new Set());
+            setLogs([]); // Clear logs on switch
+
             // Mark initial animation as done after 1.5s
             const timer = setTimeout(() => {
                 setInitialAnimationComplete(true);
             }, 1500);
 
             loadHoldings();
-            setLogs([]); // Clear logs on switch
 
             return () => clearTimeout(timer);
         }
@@ -496,7 +506,14 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 data: relevantDates,
                 triggerEvent: true // Enable clicking on axis labels
             },
-            yAxis: { type: 'value', min: (value: any) => Math.max(0, value.min - 5) },
+            yAxis: {
+                type: 'value',
+                min: (value: any) => Math.max(0, value.min - 5),
+                minInterval: 1, // Force integer steps
+                axisLabel: {
+                    formatter: (value: number) => value.toFixed(0)
+                }
+            },
             series: seriesNames.map((stockName) => {
                 const isHidden = hiddenSeries.has(stockName);
                 const isHighlighted = highlightedSeries === stockName;
@@ -865,7 +882,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 borderRadius: '12px',
                 border: isLogsOpen ? '1px solid #334155' : 'none'
             }}>
-                <div style={{ padding: '15px', height: '100%', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                <div style={{ padding: '10px 15px 0px 15px', height: '100%', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
                     {logs.length === 0 && <div style={{ color: '#475569', textAlign: 'center', marginTop: '20px' }}>Metrics and logs will appear here...</div>}
                     {logs.map((log, idx) => {
                         if (log.type === 'analysis' && log.analysisData) {
@@ -951,6 +968,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             </div>
                         );
                     })}
+                    <div style={{ height: '20px', minHeight: '20px', flexShrink: 0 }} />
                     <div ref={logsEndRef} />
                 </div>
             </div>

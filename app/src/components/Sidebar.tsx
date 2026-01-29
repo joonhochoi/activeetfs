@@ -8,7 +8,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
     // Default to expanding the first manager
-    const [expandedManagers, setExpandedManagers] = React.useState<Set<string>>(new Set([activeEtfInfos.managers[0]?.id]));
+    const [expandedManagers, setExpandedManagers] = React.useState<Set<string>>(new Set());
 
     const toggleManager = (managerId: string) => {
         setExpandedManagers(prev => {
@@ -41,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                fontSize: '0.85rem',
+                                fontSize: '0.75rem',
                                 textTransform: 'uppercase',
                                 letterSpacing: '1px',
                                 fontWeight: 600
@@ -67,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                                     border: 'none',
                                                     color: isFav ? '#fbbf24' : 'var(--text-color)', // Gold text for favorites
                                                     borderRadius: '8px',
-                                                    fontSize: '0.9rem',
+                                                    fontSize: '0.8rem',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: '10px',
@@ -78,15 +78,18 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                                                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                             >
-                                                <span style={{
-                                                    width: '6px',
-                                                    height: '6px',
-                                                    borderRadius: '50%',
-                                                    backgroundColor: isFav ? '#fbbf24' : 'var(--primary-color)',
-                                                    flexShrink: 0
-                                                }} />
+                                                {isFav ? (
+                                                    <span style={{ color: '#fbbf24', fontSize: '0.9rem', lineHeight: 1, marginRight: '-2px' }}>★</span>
+                                                ) : (
+                                                    <span style={{
+                                                        width: '6px',
+                                                        height: '6px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: 'var(--primary-color)',
+                                                        flexShrink: 0
+                                                    }} />
+                                                )}
                                                 {etf.name}
-                                                {isFav && <span>★</span>}
                                             </button>
                                         </li>
                                     );

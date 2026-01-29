@@ -97,8 +97,17 @@
     -   **Log Panel**:
         -   **Keep Height 200px** (User preference).
         -   Use `container.scrollTop` instead of `scrollIntoView` to prevent page jumping.
-         -   **Canvas Click**: Implement `getZr().on('click')` handler.
-    -   **Axis Click**: (User requested to skip/pass this).
+    -   **Y-Axis**: Force integer values (`minInterval: 1`, `formatter: value => value.toFixed(0)`).
+    -   **Sidebar**:
+        -   Reduce ETF list font size to `0.8rem` (Done).
+        -   **Icons**: Replace leading dot with Star for favorites (remove trailing star). Default to dot for non-favorites.
+        -   **Header Font**: Reduce Manager Name font size to `0.75rem`.
+     -   **Canvas Click**: Implement `getZr().on('click')` handler.
+    -   **Bug Fixes**:
+        -   **Calendar Reset**: Ensure calendar highlights (available dates) are cleared/reset immediately when switching ETFs, preventing "ghost" data from previous ETF.
+        -   **Chart Interaction**: Investigate why chart clicks are unresponsive initially. Ensure `bindClickEvent` is called reliably on every needed update, or that the ZRender handler is attached correctly after initial render/resize.
+        -   **Log Truncation**: Add padding-bottom to the log container or a spacer element to ensure the last log line is fully visible and not cut off by the container edge.
+        -   **Default Collapsed Sidebar**: Initialize the sidebar with all manager sections collapsed (showing only manager names) instead of expanded.
 
 ### Backend/Build
 #### [NEW] [get_pdfs](file:///c:/Users/juno/project/activeetfs/sidecars/cmd/get_pdfs/main.go)
