@@ -1,0 +1,321 @@
+package main
+
+import (
+	"activeetf-sidecar/pkg/scraper"
+	"flag"
+
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+)
+
+var debugFlag bool
+
+type KoActResponse struct {
+	Pdf KoActPdf `json:"pdf"`
+}
+
+type KoActPdf struct {
+	GijunYMD            string       `json:"gijunYMD"`
+	TotalCnt            int          `json:"totalCnt"`
+	PdfExcelDownloadUrl string       `json:"pdfExcelDownloadUrl"`
+	NowCnt              int          `json:"nowCnt"`
+	List                []KoActAsset `json:"list"`
+}
+
+type KoActAsset struct {
+	Risep    string `json:"risep"`
+	TotalCnt string `json:"totalCnt"`
+	SecNm    string `json:"secNm"`
+	EvalA    string `json:"evalA"`
+	BasrpRt  string `json:"basrpRt"`
+	ApplyQ   string `json:"applyQ"`
+	ItmNo    string `json:"itmNo"`
+	Curp     string `json:"curp"`
+	Ratio    string `json:"ratio"`
+	PdfType  string `json:"pdfType"`
+}
+
+var gSubparam1 string
+
+func main() {
+	// // Write args to extensive debug log file
+	// f, _ := os.OpenFile("sidecar_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if f != nil {
+	// 	fmt.Fprintf(f, "[%s] Args: %v\n", time.Now().Format(time.RFC3339), os.Args)
+	// 	f.Close()
+	// }
+	flag.Usage = func() {}
+	df := flag.Bool("debug", false, "Enable debug mode")
+	// Parse CLI arguments
+	typeParam := flag.String("type", "koact", "ETF Type (e.g. time,koact,kodex,rise,plus)")
+	idParam := flag.String("id", "", "ETF Id (e.g. 2ETFJ9)")
+	codeParam := flag.String("code", "", "ETF Code")
+	dateParam := flag.String("date", "", "Target Date (YYYY-MM-DD)")
+	flag.Parse()
+
+	debugFlag = *df
+
+	if *idParam == "" || *codeParam == "" {
+		scraper.Output([]scraper.Holding{})
+		return
+	}
+
+	targetDate := *dateParam
+	if targetDate == "" {
+		targetDate = time.Now().Format("2006-01-02") // Default to today
+	}
+
+	// API expects YYYYMMDD for gijunYMD
+	cleanDate := strings.ReplaceAll(targetDate, "-", "")
+
+	var callUrl string
+	var callFunc func(url string, date string, etfCode string) ([]scraper.Holding, error)
+	switch strings.ToLower(*typeParam) {
+	case "kodex": // koact 의 파생
+		callUrl = fmt.Sprintf("https://www.samsungfund.co.kr/api/v1/kodex/product-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
+		callFunc = getKoactHoldings
+	case "koact": // json방식임
+		callUrl = fmt.Sprintf("https://www.samsungactive.co.kr/api/v1/product/etf-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
+		callFunc = getKoactHoldings
+	case "rise": // html이 넘어옴
+		callUrl = "https://www.riseetf.co.kr/prod/finder/productViewSearchTabJquery3"
+		callFunc = getRISEHoldings
+		gSubparam1 = *idParam
+	case "plus":
+		callUrl = fmt.Sprintf("https://www.samsungactive.co.kr/api/v1/product/etf-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
+		callFunc = getKoactHoldings
+	case "time": // 상품 웹을 분석해야함
+		callUrl = fmt.Sprintf("https://timeetf.co.kr/m11_view.php?idx=%s&cate=&pdfDate=%s", *idParam, targetDate)
+		callFunc = getTIMEHoldings
+	default:
+		fmt.Printf("Unknown ETF Type: %s\n", *typeParam)
+		return
+	}
+
+	if debugFlag {
+		fmt.Printf("Fetching holdings from: %s\n", callUrl)
+	}
+
+	if v, err := callFunc(callUrl, targetDate, *codeParam); err != nil {
+		scraper.ErrorOutput(err)
+		return
+	} else {
+		scraper.Output(v)
+	}
+}
+
+func getRISEHoldings(callUrl string, date string, etfCode string) ([]scraper.Holding, error) {
+	// POST request with form data
+	formData := url.Values{}
+	formData.Set("searchDate", date)
+	formData.Set("funcCd", gSubparam1)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("POST", callUrl, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Referer", fmt.Sprintf("https://www.riseetf.co.kr/prod/finderDetail/%s?searchFlag=viewtab3", gSubparam1))
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("bad status: %d", res.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var holdings []scraper.Holding
+
+	doc.Find("tr").Each(func(i int, s *goquery.Selection) {
+		// Expecting at least 6 cells (th or td)
+		// 0: No (th)
+		// 1: Name (td)
+		// 2: StockCode (td)
+		// 3: Quantity (td)
+		// 4: Weight (td)
+		// 5: Price (td)
+
+		// Find all child cells (th or td)
+		cells := s.Find("th, td")
+		if cells.Length() < 6 {
+			return
+		}
+
+		name := strings.TrimSpace(cells.Eq(1).Text())
+		stockCode := strings.TrimSpace(cells.Eq(2).Text())
+
+		qtyStr := strings.ReplaceAll(strings.TrimSpace(cells.Eq(3).Text()), ",", "")
+		weightStr := strings.TrimSpace(cells.Eq(4).Text())
+		priceStr := strings.ReplaceAll(strings.TrimSpace(cells.Eq(5).Text()), ",", "")
+
+		// Skip header row if it contains text like "종목명" or empty values
+		if name == "종목명" || stockCode == "" {
+			return
+		}
+
+		qty, _ := strconv.ParseInt(qtyStr, 10, 64)
+		weight, _ := strconv.ParseFloat(weightStr, 64)
+		price, _ := strconv.ParseFloat(priceStr, 64)
+
+		holdings = append(holdings, scraper.Holding{
+			Date:      date,
+			EtfCode:   etfCode,
+			StockCode: stockCode,
+			Name:      name,
+			Weight:    weight,
+			Quantity:  qty,
+			Price:     price,
+		})
+	})
+
+	return holdings, nil
+}
+
+func getKoactHoldings(url string, date string, etfCode string) ([]scraper.Holding, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("bad status: %d", res.StatusCode)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var response KoActResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+
+	var holdings []scraper.Holding
+	for _, item := range response.Pdf.List {
+		qty, _ := strconv.ParseInt(item.ApplyQ, 10, 64)
+		price, _ := strconv.ParseFloat(item.EvalA, 64)
+		weight, _ := strconv.ParseFloat(item.Ratio, 64)
+
+		holdings = append(holdings, scraper.Holding{
+			Date:      date,
+			EtfCode:   etfCode,
+			StockCode: item.ItmNo,
+			Name:      item.SecNm,
+			Weight:    weight,
+			Quantity:  qty,
+			Price:     price,
+		})
+	}
+
+	return holdings, nil
+}
+
+func getTIMEHoldings(etfURL string, targetDate string, etfCode string) ([]scraper.Holding, error) {
+	//fmt.Printf("Fetching holdings from: %s\n", etfURL)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", etfURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return nil, fmt.Errorf("bad status: %d", res.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// etf code 확인
+	eCode := doc.Find(".prdNum span").First().Text()
+	eCode = strings.TrimSpace(eCode)
+	if etfCode != eCode {
+		return nil, fmt.Errorf("etf code mismatch: expected %s, got %s", etfCode, eCode)
+	}
+
+	var holdings []scraper.Holding
+
+	// Table selector based on inspection: .table3.moreList1
+	// The table structure:
+	// <thead> <tr> <th>종목코드</th> ... </tr> </thead>
+	// <tbody> <tr> <td>code</td> <td>name</td> <td>qty</td> <td>val</td> <td>weight</td> </tr> ... </tbody>
+	doc.Find("table.moreList1 tbody tr").Each(func(i int, s *goquery.Selection) {
+		tds := s.Find("td")
+		// Need at least 5 columns
+		if tds.Length() < 5 {
+			return
+		}
+
+		code := strings.TrimSpace(tds.Eq(0).Text())
+		name := strings.TrimSpace(tds.Eq(1).Text())
+		qtyStr := strings.ReplaceAll(strings.TrimSpace(tds.Eq(2).Text()), ",", "")
+		amtStr := strings.ReplaceAll(strings.TrimSpace(tds.Eq(3).Text()), ",", "")    // Value
+		weightStr := strings.ReplaceAll(strings.TrimSpace(tds.Eq(4).Text()), "%", "") // Weight
+
+		var shares int64
+		fmt.Sscanf(qtyStr, "%d", &shares)
+
+		var weight float64
+		fmt.Sscanf(weightStr, "%f", &weight)
+
+		var price float64
+		fmt.Sscanf(amtStr, "%f", &price)
+
+		holdings = append(holdings, scraper.Holding{
+			Date:      targetDate,
+			EtfCode:   etfCode,
+			StockCode: code,
+			Name:      name,
+			Weight:    weight,
+			Quantity:  shares,
+			Price:     price,
+		})
+	})
+
+	//tf.Printf("Successfully parsed %d holdings from %s\n", len(holdings), etfURL)
+	// Debug print first few
+	// for i, h := range holdings {
+	// 	if i >= 5 {
+	// 		break
+	// 	}
+	// 	tf.Printf("  [%s] %s (Shares: %d, Weight: %.2f%%)\n", h.StockCode, h.StockName, h.Shares, h.Weight)
+	// }
+
+	return holdings, nil
+}

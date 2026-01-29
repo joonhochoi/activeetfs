@@ -1,0 +1,474 @@
+{
+  "app_config": {
+    "db_name": "activeetf.db",
+    "theme": "dark"
+  },
+  "managers": [
+    {
+      "id": "timefolio",
+      "name": "Timefolio Asset Management",
+      "code": "TIME",
+      "sidecar_exe": "get_pdfs",
+      "base_url": "https://www.timeetf.co.kr",
+      "view_url": "https://timeetf.co.kr/m11_view.php?idx={$}",
+      "etfs": [
+        {
+          "code": "0113D0",
+          "name": "TIME 글로벌탑픽액티브",
+          "args": [
+            "--id",
+            "22",
+            "--code",
+            "0113D0"
+          ]
+        },
+        {
+          "code": "485810",
+          "name": "TIME 글로벌바이오액티브",
+          "args": [
+            "--id",
+            "9",
+            "--code",
+            "485810"
+          ]
+        },
+        {
+          "code": "478150",
+          "name": "TIME 글로벌우주테크&방산액티브",
+          "args": [
+            "--id",
+            "20",
+            "--code",
+            "478150"
+          ]
+        },
+        {
+          "code": "426020",
+          "name": "TIME 미국S&P500액티브",
+          "args": [
+            "--id",
+            "5",
+            "--code",
+            "426020"
+          ]
+        },
+        {
+          "code": "0043Y0",
+          "name": "TIME 차이나AI테크액티브",
+          "args": [
+            "--id",
+            "19",
+            "--code",
+            "0043Y0"
+          ]
+        },
+        {
+          "code": "456600",
+          "name": "TIME 글로벌AI인공지능액티브",
+          "args": [
+            "--id",
+            "6",
+            "--code",
+            "456600"
+          ]
+        },
+        {
+          "code": "426030",
+          "name": "TIME 미국나스닥100액티브",
+          "args": [
+            "--id",
+            "2",
+            "--code",
+            "426030"
+          ]
+        },
+        {
+          "code": "0036D0",
+          "name": "TIME 미국배당다우존스액티브",
+          "args": [
+            "--id",
+            "18",
+            "--code",
+            "0036D0"
+          ]
+        },
+        {
+          "code": "0019K0",
+          "name": "TIME 미국나스닥100채권혼합50액티브",
+          "args": [
+            "--id",
+            "10",
+            "--code",
+            "0019K0"
+          ]
+        },
+        {
+          "code": "494180",
+          "name": "TIME 글로벌소비트렌드액티브",
+          "args": [
+            "--id",
+            "8",
+            "--code",
+            "494180"
+          ]
+        },
+        {
+          "code": "404120",
+          "name": "TIME K신재생에너지액티브",
+          "args": [
+            "--id",
+            "16",
+            "--code",
+            "404120"
+          ]
+        },
+        {
+          "code": "463050",
+          "name": "TIME K바이오액티브",
+          "args": [
+            "--id",
+            "13",
+            "--code",
+            "463050"
+          ]
+        },
+        {
+          "code": "441800",
+          "name": "TIME Korea플러스배당액티브",
+          "args": [
+            "--id",
+            "12",
+            "--code",
+            "441800"
+          ]
+        },
+        {
+          "code": "385720",
+          "name": "TIME 코스피액티브",
+          "args": [
+            "--id",
+            "11",
+            "--code",
+            "385720"
+          ]
+        },
+        {
+          "code": "495060",
+          "name": "TIME 코리아밸류업액티브",
+          "args": [
+            "--id",
+            "15",
+            "--code",
+            "495060"
+          ]
+        },
+        {
+          "code": "385710",
+          "name": "TIME K이노베이션액티브",
+          "args": [
+            "--id",
+            "17",
+            "--code",
+            "385710"
+          ]
+        },
+        {
+          "code": "410870",
+          "name": "TIME K컬처액티브",
+          "args": [
+            "--id",
+            "1",
+            "--code",
+            "410870"
+          ]
+        }
+      ],
+      "common_args": [
+        "--type",
+        "time"
+      ]
+    },
+    {
+      "id": "koact",
+      "name": "Samsung Active Asset Management",
+      "code": "KoAct",
+      "sidecar_exe": "get_pdfs",
+      "base_url": "https://www.samsungactive.co.kr/",
+      "view_url": "https://www.samsungactive.co.kr/etf/view.do?id={$}",
+      "etfs": [
+        {
+          "code": "482030",
+          "name": "KoAct 반도체&2차전지핵심소재액티브",
+          "args": [
+            "--id",
+            "2ETFM8",
+            "--code",
+            "482030"
+          ]
+        },
+        {
+          "code": "0150K0",
+          "name": "KoAct 수소전력ESS인프라액티브",
+          "args": [
+            "--id",
+            "2ETFT9",
+            "--code",
+            "0150K0"
+          ]
+        },
+        {
+          "code": "462900",
+          "name": "KoAct 바이오헬스케어액티브",
+          "args": [
+            "--id",
+            "2ETFJ9",
+            "--code",
+            "462900"
+          ]
+        },
+        {
+          "code": "0132D0",
+          "name": "KoAct 글로벌K컬처밸류체인액티브",
+          "args": [
+            "--id",
+            "2ETFT2",
+            "--code",
+            "0132D0"
+          ]
+        },
+        {
+          "code": "490330",
+          "name": "KoAct 미국치매&뇌질환치료제액티브",
+          "args": [
+            "--id",
+            "2ETFO5",
+            "--code",
+            "490330"
+          ]
+        },
+        {
+          "code": "487130",
+          "name": "KoAct AI인프라액티브",
+          "args": [
+            "--id",
+            "2ETFN8",
+            "--code",
+            "487130"
+          ]
+        },
+        {
+          "code": "476850",
+          "name": "KoAct 배당성장액티브",
+          "args": [
+            "--id",
+            "2ETFM2",
+            "--code",
+            "476850"
+          ]
+        },
+        {
+          "code": "497780",
+          "name": "KoAct 미국천연가스인프라액티브",
+          "args": [
+            "--id",
+            "2ETFO9",
+            "--code",
+            "497780"
+          ]
+        },
+        {
+          "code": "495230",
+          "name": "KoAct 코리아밸류업액티브",
+          "args": [
+            "--id",
+            "2ETFP3",
+            "--code",
+            "495230"
+          ]
+        },
+        {
+          "code": "0074K0",
+          "name": "KoAct K수출핵심기업TOP30액티브",
+          "args": [
+            "--id",
+            "2ETFR6",
+            "--code",
+            "0074K0"
+          ]
+        },
+        {
+          "code": "0113G0",
+          "name": "KoAct 미국바이오헬스케어액티브",
+          "args": [
+            "--id",
+            "2ETFS9",
+            "--code",
+            "0113G0"
+          ]
+        },
+        {
+          "code": "0104H0",
+          "name": "KoAct 미국나스닥채권혼합50액티브",
+          "args": [
+            "--id",
+            "2ETFS3",
+            "--code",
+            "0104H0"
+          ]
+        },
+        {
+          "code": "475070",
+          "name": "KoAct 글로벌친환경전력인프라액티브",
+          "args": [
+            "--id",
+            "2ETFL9",
+            "--code",
+            "475070"
+          ]
+        },
+        {
+          "code": "471040",
+          "name": "KoAct 글로벌AI&로봇액티브",
+          "args": [
+            "--id",
+            "2ETFL3",
+            "--code",
+            "471040"
+          ]
+        },
+        {
+          "code": "0015B0",
+          "name": "KoAct 미국나스닥성장기업액티브",
+          "args": [
+            "--id",
+            "2ETFQ1",
+            "--code",
+            "0015B0"
+          ]
+        },
+        {
+          "code": "0093D0",
+          "name": "KoAct 팔란티어밸류체인액티브",
+          "args": [
+            "--id",
+            "2ETFR9",
+            "--code",
+            "0093D0"
+          ]
+        },
+        {
+          "code": "0051A0",
+          "name": "KoAct 브로드컴밸류체인액티브",
+          "args": [
+            "--id",
+            "2ETFR2",
+            "--code",
+            "0051A0"
+          ]
+        },
+        {
+          "code": "0020H0",
+          "name": "KoAct 글로벌양자컴퓨팅액티브",
+          "args": [
+            "--id",
+            "2ETFQ5",
+            "--code",
+            "0020H0"
+          ]
+        },
+        {
+          "code": "0154H0",
+          "name": "KoAct 차이나바이오헬스케어액티브",
+          "args": [
+            "--id",
+            "2ETFT6",
+            "--code",
+            "0154H0"
+          ]
+        }
+      ],
+      "common_args": [
+        "--type",
+        "koact"
+      ]
+    },
+    {
+      "id": "kodex",
+      "name": "Samsung Asset Management",
+      "code": "KODEX",
+      "sidecar_exe": "get_pdfs",
+      "base_url": "https://www.samsungfund.com/",
+      "view_url": "https://www.samsungfund.com/etf/product/view.do?id={$}",
+      "etfs": [
+        {
+          "code": "445290",
+          "name": "KODEX 로봇액티브",
+          "args": [
+            "--id",
+            "2ETFH5",
+            "--code",
+            "445290"
+          ]
+        },
+        {
+          "code": "401470",
+          "name": "KODEX 메타버스액티브",
+          "args": [
+            "--id",
+            "2ETFF4",
+            "--code",
+            "401470"
+          ]
+        },
+        {
+          "code": "373490",
+          "name": "KODEX 코리아혁신성장액티브",
+          "args": [
+            "--id",
+            "2ETFD9",
+            "--code",
+            "373490"
+          ]
+        },
+        {
+          "code": "364690",
+          "name": "KODEX 혁신기술테마액티브",
+          "args": [
+            "--id",
+            "2ETFC8",
+            "--code",
+            "364690"
+          ]
+        }
+      ],
+      "common_args": [
+        "--type",
+        "kodex"
+      ]
+    },
+    {
+      "id": "rise",
+      "name": "KB Asset Management",
+      "code": "RISE",
+      "sidecar_exe": "get_pdfs",
+      "base_url": "https://www.riseetf.co.kr/",
+      "view_url": "https://www.riseetf.co.kr/prod/finderDetail/{$}",
+      "etfs": [
+        {
+          "code": "0151P0",
+          "name": "RISE 코리아전략산업액티브",
+          "args": [
+            "--id",
+            "44K0",
+            "--code",
+            "0151P0"
+          ]
+        }
+      ],
+      "common_args": [
+        "--type",
+        "rise"
+      ]
+    }
+  ]
+}
