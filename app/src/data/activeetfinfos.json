@@ -463,11 +463,65 @@
             "--code",
             "0151P0"
           ]
+        },
+        {
+          "code": "459750",
+          "name": "RISE 글로벌주식분산액티브",
+          "args": [
+            "--id",
+            "44E7",
+            "--code",
+            "459750"
+          ]
         }
       ],
       "common_args": [
         "--type",
         "rise"
+      ]
+    },
+    {
+      "id": "plus",
+      "name": "Hanwha Asset Management",
+      "code": "PLUS",
+      "sidecar_exe": "get_pdfs",
+      "base_url": "https://www.plusetf.co.kr/",
+      "view_url": "https://www.plusetf.co.kr/product/detail?n={$}",
+      "etfs": [
+        {
+          "code": "0153X0",
+          "name": "PLUS 미국고배당주액티브",
+          "args": [
+            "--id",
+            "006397",
+            "--code",
+            "0153X0"
+          ]
+        },
+        {
+          "code": "0035T0",
+          "name": "PLUS 글로벌휴머노이드로봇액티브",
+          "args": [
+            "--id",
+            "006384",
+            "--code",
+            "0035T0"
+          ]
+        },
+        {
+          "code": "251600",
+          "name": "PLUS 고배당주채권혼합",
+          "args": [
+            "--id",
+            "006298",
+            "--code",
+            "251600"
+          ]
+        }
+      ],
+      "common_args": [
+        "--type",
+        "plus"
       ]
     }
   ]

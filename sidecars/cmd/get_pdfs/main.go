@@ -44,6 +44,23 @@ type KoActAsset struct {
 	PdfType  string `json:"pdfType"`
 }
 
+type PlusEtfResponse struct {
+	Content       []PlusEtfItem `json:"content"`
+	TotalPages    int           `json:"totalPages"`
+	TotalElements int           `json:"totalElements"`
+	Last          bool          `json:"last"`
+	First         bool          `json:"first"`
+}
+
+type PlusEtfItem struct {
+	Num    int     `json:"num"`
+	WkDate string  `json:"wkdate"`
+	KrJmCd string  `json:"krJmCd"`
+	JmNm   string  `json:"jmNm"`
+	Amount float64 `json:"amount"` // 수량
+	Ratio  float64 `json:"ratio"`  // 비율
+}
+
 var gSubparam1 string
 
 func main() {
@@ -91,8 +108,8 @@ func main() {
 		callFunc = getRISEHoldings
 		gSubparam1 = *idParam
 	case "plus":
-		callUrl = fmt.Sprintf("https://www.samsungactive.co.kr/api/v1/product/etf-pdf/%s.do?gijunYMD=%s", *idParam, cleanDate)
-		callFunc = getKoactHoldings
+		callUrl = fmt.Sprintf("https://www.plusetf.co.kr/api/v1/product/pdf/list?n=%s&page=0&d=%s&pageSize=10", *idParam, cleanDate)
+		callFunc = getPLUSHoldings
 	case "time": // 상품 웹을 분석해야함
 		callUrl = fmt.Sprintf("https://timeetf.co.kr/m11_view.php?idx=%s&cate=&pdfDate=%s", *idParam, targetDate)
 		callFunc = getTIMEHoldings
@@ -111,6 +128,92 @@ func main() {
 	} else {
 		scraper.Output(v)
 	}
+}
+
+func getPLUSHoldings(urlStr string, date string, etfCode string) ([]scraper.Holding, error) {
+	// Parse base URL to modify query params easily
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	var holdings []scraper.Holding
+
+	// Initial pagination state
+	page := 0
+	totalPages := 1 // Assume at least one page to start loop
+
+	for page < totalPages {
+		// Set current page
+		q := u.Query()
+		q.Set("page", strconv.Itoa(page))
+		u.RawQuery = q.Encode()
+
+		req, err := http.NewRequest("GET", u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+
+		res, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != 200 {
+			res.Body.Close()
+			return nil, fmt.Errorf("bad status: %d (page %d)", res.StatusCode, page)
+		}
+
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close() // Close immediately after reading
+		if err != nil {
+			return nil, err
+		}
+
+		var response PlusEtfResponse
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, err
+		}
+
+		// Update total pages from first response
+		if page == 0 {
+			totalPages = response.TotalPages
+			if totalPages == 0 && len(response.Content) > 0 {
+				// Fallback if totalPages is 0 but we have content (single page?)
+				totalPages = 1
+			}
+		}
+
+		for _, item := range response.Content {
+			// Convert float amount to int64 for Quantity if appropriate.
+			// Using int64(amount) implies truncation.
+			qty := int64(item.Amount)
+			weight := item.Ratio
+			// Price is not explicitly provided in the known JSON, default to 0.
+
+			holdings = append(holdings, scraper.Holding{
+				Date:      date,
+				EtfCode:   etfCode,
+				StockCode: item.KrJmCd,
+				Name:      item.JmNm,
+				Weight:    weight,
+				Quantity:  qty,
+				Price:     0, // Price info missing in JSON
+			})
+		}
+
+		page++
+		// Small delay to be polite if many pages
+		if totalPages > 5 {
+			time.Sleep(1000 * time.Millisecond)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return holdings, nil
 }
 
 func getRISEHoldings(callUrl string, date string, etfCode string) ([]scraper.Holding, error) {

@@ -468,6 +468,8 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     const date = params.name; // In category axis, name is the category (Date)
                     if (!date) return '';
 
+                    const hoveredName = params.seriesName;
+
                     // Manually find all holdings for this date that are currently visible on chart
                     const items = holdings.filter(h =>
                         h.date === date &&
@@ -485,12 +487,19 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                         const color = idx >= 0 ? COLOR_PALETTE[idx % COLOR_PALETTE.length] : '#ccc';
                         const marker = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${color};"></span>`;
 
-                        html += `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                        const isFocused = h.name === hoveredName;
+                        // specific style for the hovered item
+                        const rowStyle = isFocused
+                            ? 'font-weight:bold; color: #ff9999; background: rgba(255,255,255,0.15); border-radius: 4px;'
+                            : '';
+                        const padding = isFocused ? 'padding: 4px 6px; margin: 2px -6px;' : 'padding: 2px 0;';
+
+                        html += `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; ${rowStyle} ${padding}">
                                     <div style="display:flex; align-items:center; gap:5px;">
                                         ${marker}
                                         <span>${h.name}</span>
                                     </div>
-                                    <span style="font-weight:600;">${h.weight.toFixed(2)}</span>
+                                    <span style="font-weight:${isFocused ? '800' : '600'};">${h.weight.toFixed(2)}</span>
                                  </div>`;
                     });
                     return html;
