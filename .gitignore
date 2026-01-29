@@ -1,0 +1,26 @@
+# Binaries given the user wants source only
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node
+node_modules/
+dist/
+build/
+
+# Rust
+target/
+app/src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
