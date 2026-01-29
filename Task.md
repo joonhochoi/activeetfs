@@ -52,6 +52,16 @@
     - [x] 로그 종목명 옆 이벤트 발생 날짜 (MM-DD) 표시
     - [x] 차트 기본 조회 기간 변경 (최근 1주일)
     - [x] 차트 데이터 로직 수정 (조회 기간 내 존재하는 모든 종목 표시, 편출 종목 포함)
+    - [x] 툴팁 잘림 해결 (`appendToBody: true` + `confine: true`로 화면 내 표시)
+    - [x] 툴팁 항목 비중 내림차순 정렬 (Formatter)
+    - [x] 차트 영역 전체 클릭 인식 (ZRender Click Event)
+    - [x] 로그 오픈 시 레이아웃 밀림 방지 (minHeight 조정)
+    - [x] 차트 초기 높이 채움 보장 (ResizeObserver)
+    - [x] 로그 상단 잘림 해결 (scrollTop 사용)
+    - [x] 차트 최소 높이 550px로 복구
+    - [x] 툴팁 트리거 변경 (Trigger: item, Formatter로 전체 데이터 조회)
+    - [x] 툴팁 미표시 해결 (투명 심볼 추가: symbol 'circle', opacity 0)
+    - [x] 하단 날짜 클릭 이벤트 복구 (Pass: 사용자 요청으로 중단)
 - [x] 버그 수정
     - [x] 타임존 인식 날짜 피커 수정
     - [x] 차트/범례 색상 동기화

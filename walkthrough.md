@@ -57,3 +57,16 @@
 -   **Frontend**: React, TypeScript, Vite, ECharts
 -   **Backend**: Rust (Tauri), SQLite
 -   **Data Collection**: Go (Sidecars)
+### 차트 상호작용 및 레이아웃 개선 (2026-01-29)
+*   **툴팁 개선**:
+    *   화면 잘림 방지 (`appendToBody: true`, `confine: true`).
+    *   **동적 정렬**: 해당 날짜의 비중 내림차순으로 종목 표시.
+    *   **트리거 변경**: `trigger: 'item'`으로 변경하여 그래프 요소 위에서만 툴팁 표시 (빈 공간 제외).
+    *   **가시성 확보**: `symbol: 'circle'` (opacity 0) + `emphasis` 효과로 마우스 호버 시에만 점이 나타나게 하여 미표시 문제 해결.
+*   **레이아웃 버그 수정**:
+    *   로그창 오픈 시 화면 밀림/헤더 잘림 해결 (`scrollTop` 사용, 차트 `ResizeObserver` 적용).
+    *   차트 초기 로딩 시 크기 문제 해결.
+    *   차트 최소 높이 550px로 복구.
+*   **클릭 이벤트**:
+    *   ZRender 클릭 이벤트를 통해 그리드 영역 전체에서 날짜 선택 가능하도록 개선.
+

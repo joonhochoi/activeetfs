@@ -139,32 +139,70 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     // ------------------------------------------------
 
     useEffect(() => {
-        if (logsEndRef.current) {
-            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        // Use scrollTop instead of scrollIntoView to prevent whole page jumping
+        if (logsEndRef.current && logsEndRef.current.parentElement) {
+            const container = logsEndRef.current.parentElement;
+            container.scrollTop = container.scrollHeight;
         }
     }, [logs, isLogsOpen]);
 
     // Chart Resize (Window only, simplified)
+    // Chart Resize and ZRender Binding
     useEffect(() => {
-        const resizeChart = () => {
+        const handleResize = () => {
+            chartRef.current?.getEchartsInstance().resize();
+        };
+
+        const bindClickEvent = () => {
             if (chartRef.current) {
-                // notMerge=true forces a full refresh, preventing "ghost" series from lingering
-                // when we change series IDs for the animation effect.
-                chartRef.current.getEchartsInstance().setOption(chartOption, { notMerge: true });
+                const instance = chartRef.current.getEchartsInstance();
+                const zr = instance.getZr();
+
+                zr.off('click');
+                zr.on('click', (params: any) => {
+                    const pointInPixel = [params.offsetX, params.offsetY];
+                    if (instance.containPixel('grid', pointInPixel)) {
+                        const pointInGrid = instance.convertFromPixel({ seriesIndex: 0 }, pointInPixel);
+                        if (pointInGrid) {
+                            const xIndex = pointInGrid[0];
+                            const op = instance.getOption() as any;
+                            const data = op?.xAxis?.[0]?.data;
+                            if (data && data[xIndex]) {
+                                const clickedDate = data[xIndex];
+                                setTargetDate(new Date(clickedDate));
+                                setSelectedTableDate(clickedDate);
+                            }
+                        }
+                    }
+                });
             }
         };
 
-        // Resize immediately and after delay for layout settlement
-        resizeChart();
-        const timer = setTimeout(resizeChart, 200); // Slightly longer delay
+        // ResizeObserver for container to handle flex layout changes (initial load/logs toggle)
+        const container = document.getElementById('chart-container');
+        let resizeObserver: ResizeObserver | null = null;
 
-        window.addEventListener('resize', resizeChart);
+        if (container) {
+            resizeObserver = new ResizeObserver(() => {
+                handleResize();
+            });
+            resizeObserver.observe(container);
+        }
+
+        window.addEventListener('resize', handleResize);
+
+        bindClickEvent();
+        // Initial fallback
+        const timer = setTimeout(handleResize, 100);
 
         return () => {
             clearTimeout(timer);
-            window.removeEventListener('resize', resizeChart);
+            window.removeEventListener('resize', handleResize);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
         };
-    }, [isLogsOpen, holdings, seriesNames, highlightedSeries]); // Added highlightedSeries to dependency to trigger re-render on highlight change
+    }, [isLogsOpen, holdings, seriesNames, highlightedSeries, viewStartDate, viewEndDate]);
 
     useEffect(() => {
         if (etfCode) {
@@ -180,7 +218,13 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
             return () => clearTimeout(timer);
         }
-    }, [etfCode]);
+    }, [etfCode]); // Removing timer logic duplication here, let previous effects handle it? 
+    // Actually the previous timer logic edit might have been messy. 
+    // Let's rely on the useEffect at line 160 which we merged.
+
+    // Clean up older resize-only effect logic if needed? 
+    // The ZRender binding needs chartOption dependency or re-binding.
+    // Let's keep the ZRender binding in the layout/resize effect for now but add chartOption dependency.
 
     const loadHoldings = async () => {
         setLoading(true);
@@ -404,12 +448,54 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 left: 'center',
                 textStyle: { color: '#ccc', fontSize: 14 }
             },
-            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+            tooltip: {
+                trigger: 'item', // Only trigger on elements (lines/points), not whitespace
+                axisPointer: { type: 'cross' },
+                appendToBody: true,
+                confine: true,
+                extraCssText: 'border: 1px solid #444; background-color: rgba(0, 0, 0, 0.8);',
+                formatter: (params: any) => {
+                    const date = params.name; // In category axis, name is the category (Date)
+                    if (!date) return '';
+
+                    // Manually find all holdings for this date that are currently visible on chart
+                    const items = holdings.filter(h =>
+                        h.date === date &&
+                        seriesNames.includes(h.name) &&
+                        !hiddenSeries.has(h.name)
+                    );
+
+                    // Sort descending by value
+                    items.sort((a, b) => b.weight - a.weight);
+
+                    let html = `<div style="font-weight:bold; margin-bottom:5px;">${date}</div>`;
+                    items.forEach((h: any) => {
+                        // Reconstruct marker color
+                        const idx = seriesNames.indexOf(h.name);
+                        const color = idx >= 0 ? COLOR_PALETTE[idx % COLOR_PALETTE.length] : '#ccc';
+                        const marker = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${color};"></span>`;
+
+                        html += `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                                    <div style="display:flex; align-items:center; gap:5px;">
+                                        ${marker}
+                                        <span>${h.name}</span>
+                                    </div>
+                                    <span style="font-weight:600;">${h.weight.toFixed(2)}</span>
+                                 </div>`;
+                    });
+                    return html;
+                }
+            },
             legend: {
                 show: false // Hide default legend
             },
             grid: { left: '3%', right: '4%', bottom: '20px', top: '15%', containLabel: true },
-            xAxis: { type: 'category', boundaryGap: false, data: relevantDates },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: relevantDates,
+                triggerEvent: true // Enable clicking on axis labels
+            },
             yAxis: { type: 'value', min: (value: any) => Math.max(0, value.min - 5) },
             series: seriesNames.map((stockName) => {
                 const isHidden = hiddenSeries.has(stockName);
@@ -421,10 +507,18 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     name: stockName,
                     type: 'line',
                     smooth: true,
-                    symbol: 'none',
+                    symbol: 'circle', // Must be a symbol to trigger 'item' tooltip
+                    symbolSize: 8,    // Large enough to be easily hovered
+                    itemStyle: {
+                        opacity: 0    // Invisible by default
+                    },
                     emphasis: {
                         focus: 'series',
-                        blurScope: 'coordinateSystem'
+                        blurScope: 'coordinateSystem',
+                        itemStyle: {
+                            opacity: 1 // Visible on hover
+                        },
+                        scale: true
                     },
                     lineStyle: {
                         width: isHighlighted ? 3 : 1,
@@ -657,7 +751,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 id="chart-container"
                 style={{
                     flex: 1,
-                    minHeight: '600px', // Increased to 600px per request
+                    minHeight: '550px', // Reverted to 550px per request
                     height: '100%',
                     overflow: 'hidden',
                     background: 'rgba(30, 41, 59, 0.4)',
@@ -679,58 +773,72 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             style={{ height: '100%', width: '100%', flex: 1 }}
                             theme="dark"
                             notMerge={true} // Critical: prevents ghost lines when series IDs change
+                            onEvents={{
+                                click: (params: any) => {
+                                    // Handle click on axis label explicitly (since ZRender might miss DOM elements outside grid)
+                                    if (params.componentType === 'xAxis') {
+                                        const clickedDate = params.value;
+                                        if (clickedDate && /^\d{4}-\d{2}-\d{2}$/.test(clickedDate)) {
+                                            setTargetDate(new Date(clickedDate));
+                                            setSelectedTableDate(clickedDate);
+                                        }
+                                    }
+                                }
+                            }}
                         />
                     </>
                 )}
             </div>
 
             {/* Custom Legend Area */}
-            {seriesNames.length > 0 && !loading && (
-                <div style={{
-                    padding: '8px 4px',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '6px',
-                    justifyContent: 'center',
-                    maxHeight: '80px', // Approx 3 lines
-                    overflowY: 'auto',
-                    marginTop: '5px',
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: 'rgba(255,255,255,0.2) transparent'
-                }}>
-                    {seriesNames.map((name, idx) => (
-                        <div
-                            key={name}
-                            onClick={() => toggleSeries(name)}
-                            onDoubleClick={() => isolateSeries(name)}
-                            title="Click to toggle, Double-click to isolate"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.8rem',
-                                color: hiddenSeries.has(name) ? '#64748b' : (highlightedSeries && highlightedSeries !== name ? '#64748b' : '#e2e8f0'),
-                                cursor: 'pointer',
-                                background: highlightedSeries === name ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                userSelect: 'none',
-                                textDecoration: hiddenSeries.has(name) ? 'line-through' : 'none',
-                                border: highlightedSeries === name ? '1px solid #3b82f6' : '1px solid transparent',
-                                opacity: (highlightedSeries && highlightedSeries !== name) ? 0.5 : 1
-                            }}
-                        >
-                            <span style={{
-                                width: '10px',
-                                height: '2px', // Thin line for Line series legend mark
-                                background: hiddenSeries.has(name) ? '#64748b' : (COLOR_PALETTE[idx % COLOR_PALETTE.length]),
-                                display: 'inline-block'
-                            }}></span>
-                            {name}
-                        </div>
-                    ))}
-                </div>
-            )}
+            {
+                seriesNames.length > 0 && !loading && (
+                    <div style={{
+                        padding: '8px 4px',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                        justifyContent: 'center',
+                        maxHeight: '80px', // Approx 3 lines
+                        overflowY: 'auto',
+                        marginTop: '5px',
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: 'rgba(255,255,255,0.2) transparent'
+                    }}>
+                        {seriesNames.map((name, idx) => (
+                            <div
+                                key={name}
+                                onClick={() => toggleSeries(name)}
+                                onDoubleClick={() => isolateSeries(name)}
+                                title="Click to toggle, Double-click to isolate"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.8rem',
+                                    color: hiddenSeries.has(name) ? '#64748b' : (highlightedSeries && highlightedSeries !== name ? '#64748b' : '#e2e8f0'),
+                                    cursor: 'pointer',
+                                    background: highlightedSeries === name ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    userSelect: 'none',
+                                    textDecoration: hiddenSeries.has(name) ? 'line-through' : 'none',
+                                    border: highlightedSeries === name ? '1px solid #3b82f6' : '1px solid transparent',
+                                    opacity: (highlightedSeries && highlightedSeries !== name) ? 0.5 : 1
+                                }}
+                            >
+                                <span style={{
+                                    width: '10px',
+                                    height: '2px', // Thin line for Line series legend mark
+                                    background: hiddenSeries.has(name) ? '#64748b' : (COLOR_PALETTE[idx % COLOR_PALETTE.length]),
+                                    display: 'inline-block'
+                                }}></span>
+                                {name}
+                            </div>
+                        ))}
+                    </div>
+                )
+            }
 
             {/* Logs Area Toggle */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '5px 0' }}>
@@ -870,7 +978,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     100% { transform: rotate(360deg); }
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
 

@@ -79,6 +79,26 @@
     -   Instead of `latestHoldings.filter...`, scan **all holdings within the Date Range**.
     -   Collect all unique series (stocks) that appeared at least once in the range.
     -   Sort by `max(weight)` or `latest weight` to respect `Top N` limit (will use `max` to ensure transient high-weight stocks are shown).
+-   **Chart Interaction**:
+    -   Enable `triggerEvent: true` on xAxis.
+-   **Chart Interaction**:
+    -   Enable `triggerEvent: true` on xAxis.
+    -   **Tooltip**:
+        -   `appendToBody: true` (Render outside chart DOM).
+        -   **Remove Scroll**: Remove `max-height` and `overflow-y` to show full content per user request.
+        -   **Sort Items**: Add `formatter` to sort items by value (weight) descending.
+    -   **Layout Fix**:
+        -   Change Chart `minHeight` to `550px` (User request).
+        -   **ResizeObserver**: Keeps chart filling the space.
+    -   **Tooltip**:
+        -   Change `trigger` to `'item'` (Only show when hovering lines/points, not whitespace).
+        -   **Fix Visibility**: Change `symbol: 'none'` to `'circle'`, `symbolSize: 8`, `itemStyle: { opacity: 0 }`. This makes points interactive (triggering tooltip) but invisible unless hovered (`emphasis: { opacity: 1 }`).
+        -   **Formatter Update**: Since `trigger: 'item'` passes single point, use `params.name` (Date) to look up *all* holdings for that date from state, sort them, and display. This preserves the "Daily Summary" feature while satisfying the "No whitespace tooltip" constraint.
+    -   **Log Panel**:
+        -   **Keep Height 200px** (User preference).
+        -   Use `container.scrollTop` instead of `scrollIntoView` to prevent page jumping.
+         -   **Canvas Click**: Implement `getZr().on('click')` handler.
+    -   **Axis Click**: (User requested to skip/pass this).
 
 ### Backend/Build
 #### [NEW] [get_pdfs](file:///c:/Users/juno/project/activeetfs/sidecars/cmd/get_pdfs/main.go)
