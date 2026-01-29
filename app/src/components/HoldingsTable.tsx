@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { Holding } from '../types';
@@ -69,6 +70,23 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
                     font-weight: bold;
                     border-radius: 50%;
                 }
+                /* Hide Weekends (Sun/Sat) */
+                .react-datepicker__day-name:first-child,
+                .react-datepicker__day-name:last-child,
+                .react-datepicker__day:first-child,
+                .react-datepicker__day:last-child {
+                    display: none;
+                }
+                .react-datepicker__week {
+                    display: flex;
+                    justify-content: center;
+                }
+                .react-datepicker__header {
+                    width: auto;
+                }
+                .react-datepicker {
+                    font-size: 0.9rem;
+                }
             `}</style>
 
             <div style={{
@@ -85,11 +103,11 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>
-                            <th style={{ padding: '8px', textAlign: 'left', fontWeight: 'normal' }}>종목명</th>
-                            <th style={{ padding: '8px', textAlign: 'right', fontWeight: 'normal' }}>비중(%)</th>
+                            <th style={{ padding: '5px', textAlign: 'left', fontWeight: 'normal' }}>종목명</th>
+                            <th style={{ padding: '5px', textAlign: 'right', fontWeight: 'normal' }}>비중(%)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -110,18 +128,18 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                     onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                 >
-                                    <td style={{ padding: '10px 8px' }}>
+                                    <td style={{ padding: '6px 8px' }}>
                                         <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             {h.name}
                                             {isNew && <span style={{ fontSize: '0.6rem', background: '#eab308', color: 'black', padding: '1px 3px', borderRadius: '2px', fontWeight: 'bold' }}>NEW</span>}
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{h.stock_code}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{h.stock_code}</div>
                                     </td>
-                                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
                                         <div>{h.weight.toFixed(2)}%</div>
                                         {comparisonHoldings && !isNew && Math.abs(diff) > 0.001 && (
                                             <div style={{
-                                                fontSize: '0.75rem',
+                                                fontSize: '0.7rem',
                                                 color: diff > 0 ? '#f43f5e' : '#3b82f6',
                                                 fontWeight: 600
                                             }}>
@@ -168,6 +186,8 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                     const dateStr = `${year}-${month}-${day}`;
                                     return availableDates.has(dateStr) ? "day-has-data" : "";
                                 }}
+                                popperContainer={({ children }) => createPortal(children, document.body)}
+                                popperPlacement="bottom-end"
                             />
                         </div>
                         <button

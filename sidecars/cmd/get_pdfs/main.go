@@ -123,10 +123,43 @@ func getRISEHoldings(callUrl string, date string, etfCode string) ([]scraper.Hol
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+
+	// POST /prod/finder/productViewSearchTabJquery3 HTTP/1.1
+	// Accept: */*
+	// Accept-Encoding: gzip, deflate, br, zstd
+	// Accept-Language: ko,en-US;q=0.9,en;q=0.8,ja;q=0.7,zh-CN;q=0.6,zh;q=0.5
+	// Cache-Control: no-cache
+	// Connection: keep-alive
+	// Content-Length: 33
+	// Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+	// Cookie: ETF_SESSIONID1=aa6b6333-3980-43f6-870b-c7f315136b4c; JSESSIONID=3lbTbkEI6gEv1Wa61MAfikKI6PNUZciGfCnKMEGhcIX5XnBltxcpE3Jrr6aLDin8.amV1c19kb21haW4vZXRm
+	// Host: www.riseetf.co.kr
+	// Origin: https://www.riseetf.co.kr
+	// Pragma: no-cache
+	// Referer: https://www.riseetf.co.kr/prod/finderDetail/44K0?searchFlag=viewtab3
+	// Sec-Fetch-Dest: empty
+	// Sec-Fetch-Mode: cors
+	// Sec-Fetch-Site: same-origin
+	// User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+	// X-Requested-With: XMLHttpRequest
+	// sec-ch-ua: "Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+	// sec-ch-ua-mobile: ?0
+	// sec-ch-ua-platform: "Windows"
+
+	req.Header.Set("Host", "www.riseetf.co.kr")
+	req.Header.Set("Origin", "https://www.riseetf.co.kr")
+	req.Header.Set("Referer", fmt.Sprintf("https://www.riseetf.co.kr/prod/finderDetail/%s?searchFlag=viewtab3", gSubparam1))
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Accept", "*/*")
-	req.Header.Set("Referer", fmt.Sprintf("https://www.riseetf.co.kr/prod/finderDetail/%s?searchFlag=viewtab3", gSubparam1))
+	req.Header.Set("Accept-Language", "ko,en-US;q=0.9,en;q=0.8,ja;q=0.7,zh-CN;q=0.6,zh;q=0.5")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 
 	res, err := client.Do(req)
 	if err != nil {

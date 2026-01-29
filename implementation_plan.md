@@ -108,6 +108,7 @@
         -   **Chart Interaction**: Investigate why chart clicks are unresponsive initially. Ensure `bindClickEvent` is called reliably on every needed update, or that the ZRender handler is attached correctly after initial render/resize.
         -   **Log Truncation**: Add padding-bottom to the log container or a spacer element to ensure the last log line is fully visible and not cut off by the container edge.
         -   **Default Collapsed Sidebar**: Initialize the sidebar with all manager sections collapsed (showing only manager names) instead of expanded.
+        -   **Calendar Clipping**: Fix the date picker in the comparison table being clipped by the sidebar. Use `createPortal` for positioning and hide Saturday/Sunday columns via CSS as requested.
 
 ### Backend/Build
 #### [NEW] [get_pdfs](file:///c:/Users/juno/project/activeetfs/sidecars/cmd/get_pdfs/main.go)

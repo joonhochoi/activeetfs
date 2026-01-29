@@ -95,7 +95,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                     onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
                     style={{
                         position: 'absolute',
-                        right: isRightSidebarOpen ? '316px' : '10px', // 300px width + 16px margin
+                        right: isRightSidebarOpen ? '276px' : '10px', // 260px width + 16px margin
                         top: '15px',
                         zIndex: 100,
                         width: '30px',
@@ -122,7 +122,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                 <aside
                     className="glass-panel"
                     style={{
-                        width: isRightSidebarOpen ? '300px' : '0px',
+                        width: isRightSidebarOpen ? '260px' : '0px',
                         margin: isRightSidebarOpen ? '16px' : '16px 0 16px 0',
                         display: 'flex',
                         flexDirection: 'column',
