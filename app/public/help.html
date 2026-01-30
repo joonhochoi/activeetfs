@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,7 +24,9 @@
             padding: 2rem;
         }
 
-        h1, h2, h3 {
+        h1,
+        h2,
+        h3 {
             color: var(--primary-color);
             margin-top: 1.5em;
         }
@@ -56,17 +59,20 @@
         }
     </style>
 </head>
+
 <body>
     <h1>Active ETF Viewer 사용 가이드</h1>
-    
-    <p>본 프로그램은 화면을 크게 <strong>좌측 ETF 목록</strong>, <strong>중앙 날짜별 종목 구성 차트</strong>, <strong>우측 특정일의 종목 구성 비율 테이블</strong>로 나누어 구성되었습니다.</p>
+
+    <p>본 프로그램은 화면을 크게 <strong>좌측 ETF 목록</strong>, <strong>중앙 날짜별 종목 구성 차트</strong>, <strong>우측 특정일의 종목 구성 비율
+            테이블</strong>로 나누어 구성되었습니다.</p>
 
     <div class="section">
         <h2>1. 좌측 ETF 목록</h2>
         <ul>
             <li>현재 총 5개 운용사의 액티브 ETF들을 정리해두었습니다. (ETF 목록 순서는 각 운용사 홈페이지 목록 기준)</li>
             <li>액티브 ETF 전문 운용사인 <strong>TIME</strong>과 <strong>KoAct</strong>는 제작 시점의 전체 ETF 목록을 포함하고 있습니다.</li>
-            <li><strong>KODEX</strong>, <strong>RISE</strong>, <strong>PLUS</strong>의 경우, 주요 ETF를 포함하여 선별적으로 구성하였습니다.</li>
+            <li><strong>KODEX</strong>, <strong>RISE</strong>, <strong>PLUS</strong>의 경우, 주요 ETF를 포함하여 선별적으로 구성하였습니다.
+            </li>
             <li>각 ETF 이름 옆의 <strong>별표(★)</strong>를 클릭하면 즐겨찾기로 등록되어 목록 상단에서 쉽게 확인할 수 있습니다.</li>
         </ul>
     </div>
@@ -80,7 +86,7 @@
             <li><strong>기간 설정</strong>: 상단의 'View' 옆 메뉴를 통해 표시할 종목 수와 조회 기간을 설정할 수 있습니다.</li>
             <li><strong>Analyze (분석)</strong>: 해당 기간 중 편입/편출된 종목 내역을 하단 로그창에 출력합니다.</li>
             <li>
-                <strong>Update & 달력</strong>: 
+                <strong>Update & 달력</strong>:
                 <ul>
                     <li>달력에 <strong>파란색 배경</strong>으로 표시된 날짜는 데이터가 존재하는 날짜입니다.</li>
                     <li>데이터를 갱신하거나 새로 받고 싶은 날짜들을 선택한 후 <strong>Update 버튼</strong>을 누르면 종목 데이터를 수집합니다.</li>
@@ -89,7 +95,7 @@
             </li>
             <li><strong>날짜 선택</strong>: 차트 내부를 클릭하면 클릭 지점과 가장 가까운 날짜의 데이터가 우측 테이블에 표시됩니다.</li>
             <li>
-                <strong>편입/편출 종목 확인</strong>: 
+                <strong>편입/편출 종목 확인</strong>:
                 <ul>
                     <li>로그창에 출력된 편입/편출 종목을 클릭하면, 차트에서 해당 종목의 라인을 강조해줍니다.</li>
                     <li>Top 10 이하 종목은 차트에 잘 보이지 않을 수 있으므로, 종목 갯수를 <strong>All</strong>로 설정하면 확인 가능합니다.</li>
@@ -103,6 +109,7 @@
         <ul>
             <li>기본적으로 저장된 데이터 중 최신일 기준의 종목 구성 비율을 보여줍니다.</li>
             <li>중앙 차트에서 특정 날짜를 클릭하면 해당 일자의 구성으로 변경됩니다.</li>
+            <li>각 종목의 이름을 클릭하면 차트에서 해당 종목의 라인을 강조해줍니다.</li>
             <li>테이블 하단에 위치한 <strong>별도 달력</strong>을 통해, 차트와 독립적으로 다른 날짜의 데이터를 확인하고 비교할 수 있습니다.</li>
         </ul>
     </div>
@@ -128,4 +135,5 @@
         </ul>
     </div>
 </body>
+
 </html>

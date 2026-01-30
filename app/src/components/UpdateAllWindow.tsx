@@ -184,7 +184,7 @@ const UpdateAllWindow: React.FC = () => {
                         border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '8px',
                         padding: '15px',
-                        height: '500px', // Fixed height to enable scrolling
+                        height: '420px', // Fixed height to enable scrolling
                         overflowY: 'auto', // Force scroll
                         overflowX: 'hidden',
                         display: 'flex',

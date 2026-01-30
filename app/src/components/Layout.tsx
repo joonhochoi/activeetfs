@@ -45,7 +45,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
             url: '/index.html#update-all',
             title: 'Update All ETFs',
             width: 900,
-            height: 800,
+            height: 650,
             resizable: true,
             visible: true,
             center: true,
@@ -99,10 +99,12 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                 flexDirection: 'column'
             }}>
                 <div style={{ height: '20px' }}></div>
-                <Sidebar
-                    onSelectEtf={onSelectEtf}
-                    favorites={favorites}
-                />
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <Sidebar
+                        onSelectEtf={onSelectEtf}
+                        favorites={favorites}
+                    />
+                </div>
 
                 {/* Sidebar Footer */}
                 <div style={{
