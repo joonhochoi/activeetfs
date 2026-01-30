@@ -82,8 +82,8 @@ func main() {
 	debugFlag = *df
 
 	if *idParam == "" || *codeParam == "" {
-		scraper.Output([]scraper.Holding{})
-		return
+		//scraper.Output([]scraper.Holding{})
+		return // 그냥 종료
 	}
 
 	targetDate := *dateParam
@@ -114,7 +114,7 @@ func main() {
 		callUrl = fmt.Sprintf("https://timeetf.co.kr/m11_view.php?idx=%s&cate=&pdfDate=%s", *idParam, targetDate)
 		callFunc = getTIMEHoldings
 	default:
-		fmt.Printf("Unknown ETF Type: %s\n", *typeParam)
+		scraper.ErrorOutput(fmt.Errorf("Unknown ETF Type: %s\n", *typeParam))
 		return
 	}
 

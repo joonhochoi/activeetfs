@@ -30,8 +30,9 @@ function Build-Sidecar {
 }
 
 # 1. Build Sidecars
-Build-Sidecar -SidecarName "get_time"
-Build-Sidecar -SidecarName "get_koact"
+#Build-Sidecar -SidecarName "get_time"
+#Build-Sidecar -SidecarName "get_koact"
+Build-Sidecar -SidecarName "get_pdfs"
 
 Write-Host "3. Building Tauri App..."
 Set-Location "..\app"

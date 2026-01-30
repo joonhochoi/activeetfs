@@ -1,6 +1,10 @@
 import React from 'react';
 import Sidebar from './Sidebar';
-import '../styles.css';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import pkg from '../../package.json';
+
+
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -12,6 +16,28 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favorites }) => {
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(true);
+    const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+    const openHelpWindow = async () => {
+        setIsMenuOpen(false);
+        const webview = new WebviewWindow('help', {
+            url: '/help.html',
+            title: 'Active ETF Viewer 도움말',
+            width: 950,
+            height: 900,
+            resizable: true,
+            visible: true
+        });
+
+        webview.once('tauri://created', function () {
+            // webview window successfully created
+        });
+
+        webview.once('tauri://error', function (e) {
+            // an error happened creating the webview window
+            console.error('Failed to open help window', e);
+        });
+    };
 
     return (
         <div style={{ display: 'flex', height: '100vh', width: '100vw', position: 'relative' }}>
@@ -55,21 +81,85 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                     pointerEvents: isSidebarOpen ? 'auto' : 'none'
                 }}
             >
-                <div style={{ padding: '20px', borderBottom: 'var(--glass-border)', display: 'flex', justifyContent: 'center' }}>
-                    <h1 style={{
-                        margin: 0,
-                        fontSize: '1.2rem',
-                        fontWeight: 700,
-                        background: 'linear-gradient(to right, #3b82f6, #f43f5e)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        whiteSpace: 'nowrap'
-                    }}>
-                        Active ETF Viewer
-                    </h1>
-                </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <Sidebar onSelectEtf={onSelectEtf} favorites={favorites} />
+                </div>
+
+                {/* Sidebar Footer */}
+                <div style={{
+                    padding: '15px',
+                    borderTop: 'var(--glass-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'relative' // For absolute menu positioning
+                }}>
+                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+                        Active Etfs v{pkg.version}
+                    </div>
+
+                    <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Menu
+                    </button>
+
+                    {/* Menu Popup */}
+                    {isMenuOpen && (
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '50px', // Above the footer
+                            right: '5px',
+                            background: '#1e293b',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            borderRadius: '8px',
+                            padding: '5px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                            zIndex: 1000,
+                            width: '150px'
+                        }}>
+                            <button
+                                onClick={openHelpWindow}
+                                className="menu-item"
+                            >
+                                Help
+                            </button>
+                            <button
+                                disabled
+                                className="menu-item"
+                            >
+                                Version Check
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); alert("Update All functionality coming soon!"); }}
+                                className="menu-item"
+                            >
+                                Update All (1day)
+                            </button>
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                            <button
+                                onClick={async () => {
+                                    setIsMenuOpen(false);
+                                    await getCurrentWindow().close();
+                                }}
+                                className="menu-item"
+                            >
+                                Exit
+                            </button>
+                        </div>
+                    )}
                 </div>
             </aside>
 
