@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Holding } from '../types';
 import activeEtfInfos from '../data/activeetfinfos.json';
@@ -228,9 +229,19 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
             return () => clearTimeout(timer);
         }
-    }, [etfCode]); // Removing timer logic duplication here, let previous effects handle it? 
-    // Actually the previous timer logic edit might have been messy. 
-    // Let's rely on the useEffect at line 160 which we merged.
+    }, [etfCode]);
+
+    useEffect(() => {
+        const unlisten = listen('refresh-data', () => {
+            console.log('Refresh data event received');
+            if (etfCode) loadHoldings();
+        });
+
+        // Cleanup function needs to handle the promise returned by listen
+        return () => {
+            unlisten.then(f => f());
+        };
+    }, [etfCode]);
 
     // Clean up older resize-only effect logic if needed? 
     // The ZRender binding needs chartOption dependency or re-binding.

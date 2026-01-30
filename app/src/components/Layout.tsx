@@ -39,51 +39,70 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
         });
     };
 
+    const openUpdateAllWindow = async () => {
+        setIsMenuOpen(false);
+        const webview = new WebviewWindow('update-all', {
+            url: '/index.html#update-all',
+            title: 'Update All ETFs',
+            width: 900,
+            height: 800,
+            resizable: true,
+            visible: true,
+            center: true,
+            alwaysOnTop: true
+        });
+
+        webview.once('tauri://created', function () {
+            // webview window successfully created
+        });
+
+        webview.once('tauri://error', function (e) {
+            console.error('Failed to open help window', e);
+        });
+    }
+
     return (
         <div style={{ display: 'flex', height: '100vh', width: '100vw', position: 'relative' }}>
             {/* Left Sidebar Toggle Button - Floating */}
             <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 style={{
                     position: 'absolute',
-                    left: isSidebarOpen ? '260px' : '10px',
-                    top: '15px',
+                    top: '20px',
+                    left: isSidebarOpen ? '260px' : '20px',
                     zIndex: 100,
-                    width: '30px',
-                    height: '30px',
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    color: '#94a3b8',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: '50%',
-                    border: 'none',
-                    background: 'var(--primary-color)',
-                    color: 'white',
+                    width: '32px',
+                    height: '32px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    transition: 'left 0.3s ease',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.3)'
+                    transition: 'left 0.3s ease'
                 }}
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 title={isSidebarOpen ? "왼쪽 사이드바 접기" : "왼쪽 사이드바 펼치기"}
             >
-                {isSidebarOpen ? '<<' : '>>'}
+                {isSidebarOpen ? '❮' : '❯'}
             </button>
 
-            {/* Left Sidebar */}
-            <aside
-                className="glass-panel"
-                style={{
-                    width: isSidebarOpen ? '260px' : '0px',
-                    margin: isSidebarOpen ? '16px' : '16px 0 16px 0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    transition: 'all 0.3s ease',
-                    opacity: isSidebarOpen ? 1 : 0,
-                    pointerEvents: isSidebarOpen ? 'auto' : 'none'
-                }}
-            >
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                    <Sidebar onSelectEtf={onSelectEtf} favorites={favorites} />
-                </div>
+            {/* Sidebar */}
+            <aside style={{
+                width: isSidebarOpen ? '250px' : '0',
+                overflow: 'hidden',
+                transition: 'width 0.3s ease',
+                background: 'var(--sidebar-bg)',
+                borderRight: 'var(--glass-border)',
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
+                <div style={{ height: '20px' }}></div>
+                <Sidebar
+                    onSelectEtf={onSelectEtf}
+                    favorites={favorites}
+                />
 
                 {/* Sidebar Footer */}
                 <div style={{
@@ -143,7 +162,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 Version Check
                             </button>
                             <button
-                                onClick={() => { setIsMenuOpen(false); alert("Update All functionality coming soon!"); }}
+                                onClick={openUpdateAllWindow}
                                 className="menu-item"
                             >
                                 Update All (1day)

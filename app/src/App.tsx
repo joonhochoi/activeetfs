@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import UpdateAllWindow from './components/UpdateAllWindow';
 import { invoke } from '@tauri-apps/api/core';
 
 function App() {
@@ -31,6 +32,18 @@ function App() {
             console.error('Failed to toggle favorite:', err);
         }
     };
+
+    const [hash, setHash] = useState(window.location.hash);
+
+    useEffect(() => {
+        const handleHashChange = () => setHash(window.location.hash);
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
+
+    if (hash === '#update-all') {
+        return <UpdateAllWindow />;
+    }
 
     return (
         <Layout
