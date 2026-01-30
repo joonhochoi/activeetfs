@@ -83,13 +83,25 @@ const UpdateAllWindow: React.FC = () => {
 
             try {
                 // Construct args
+                // Extract arguments
                 const commonArgs = (manager as any).common_args || [];
                 const etfArgs = etf.args || [];
-                const finalArgs = [...commonArgs, ...etfArgs, "--date", targetDateStr];
 
-                await invoke<string>('run_sidecar', {
-                    sidecarExe: manager.sidecar_exe,
-                    args: finalArgs
+                // Helper to find value after a flag
+                const findArg = (args: string[], flag: string) => {
+                    const idx = args.indexOf(flag);
+                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
+                };
+
+                const provider = findArg(commonArgs, "--type") || manager.id;
+                const id = findArg(etfArgs, "--id");
+                const code = findArg(etfArgs, "--code") || etf.code;
+
+                await invoke<string>('get_etf_holdings', {
+                    provider,
+                    id,
+                    code,
+                    date: targetDateStr
                 });
 
                 addLog(`[${etf.name}] 데이터 가져오기 ... [성공]`, 'success');

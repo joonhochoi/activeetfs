@@ -6,6 +6,7 @@ fn greet(name: &str) -> String {
 
 mod db;
 mod commands;
+mod fetch;
 
 use sqlx::SqlitePool;
 use tauri::Manager;
@@ -34,7 +35,8 @@ pub fn run() {
             commands::analyze_changes,
             commands::analyze_trends,
             commands::get_favorite_etfs,
-            commands::toggle_etf_favorite
+            commands::toggle_etf_favorite,
+            fetch::get_etf_holdings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

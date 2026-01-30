@@ -311,16 +311,25 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             addLog(`Starting update for ${dateStr}...`, 'info');
 
             try {
-                // Construct args
+                // Extract arguments for the new Rust command
                 const commonArgs = (manager as any).common_args || [];
-                // etf.args should be Array<string>
                 const etfArgs = etf.args || [];
-                // Add date
-                const finalArgs = [...commonArgs, ...etfArgs, "--date", dateStr];
 
-                const output = await invoke<string>('run_sidecar', {
-                    sidecarExe: manager.sidecar_exe,
-                    args: finalArgs
+                // Helper to find value after a flag
+                const findArg = (args: string[], flag: string) => {
+                    const idx = args.indexOf(flag);
+                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
+                };
+
+                const provider = findArg(commonArgs, "--type") || manager.id;
+                const id = findArg(etfArgs, "--id");
+                const code = findArg(etfArgs, "--code") || etf.code;
+
+                const output = await invoke<string>('get_etf_holdings', {
+                    provider,
+                    id,
+                    code,
+                    date: dateStr
                 });
 
                 addLog(`Update success for ${dateStr}: ${output}`, 'success');
