@@ -5,7 +5,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
 import activeEtfInfos from '../data/activeetfinfos.json';
-import { Holding } from '../types';
 
 interface LogItem {
     time: string;
@@ -18,29 +17,9 @@ const UpdateAllWindow: React.FC = () => {
     const [logs, setLogs] = useState<LogItem[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);
     const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-    const [existingDates, setExistingDates] = useState<Set<string>>(new Set());
     const logsEndRef = useRef<HTMLDivElement>(null);
 
     const [isComplete, setIsComplete] = useState(false);
-
-    // Initial load: fetch dates for the first ETF to populate calendar highlights
-    useEffect(() => {
-        const fetchExistingDates = async () => {
-            try {
-                // Pick the first ETF from the first manager as a reference
-                const firstManager = activeEtfInfos.managers[0];
-                if (firstManager && firstManager.etfs.length > 0) {
-                    const firstEtf = firstManager.etfs[0];
-                    const data = await invoke<Holding[]>('get_holdings', { etfCode: firstEtf.code });
-                    const dates = new Set(data.map(h => h.date));
-                    setExistingDates(dates);
-                }
-            } catch (error) {
-                console.error("Failed to fetch initial dates for calendar highlights:", error);
-            }
-        };
-        fetchExistingDates();
-    }, []);
 
     // Auto-scroll logs
     useEffect(() => {
@@ -146,10 +125,6 @@ const UpdateAllWindow: React.FC = () => {
                         selected={selectedDate}
                         onChange={(date: Date | null) => { if (date) setSelectedDate(date); }}
                         inline
-                        dayClassName={(date) => {
-                            const dateStr = toLocalDateString(date);
-                            return existingDates.has(dateStr) ? "has-data" : "";
-                        }}
                     />
                     <style>{`
                         .react-datepicker {
@@ -178,14 +153,21 @@ const UpdateAllWindow: React.FC = () => {
                         .react-datepicker__day--keyboard-selected {
                             background-color: rgba(59, 130, 246, 0.5);
                         }
-                        .has-data {
-                            background-color: rgba(59, 130, 246, 0.2);
-                            font-weight: bold;
-                            color: #60a5fa;
+
+                        /* Hide weekends (Sunday is 1st, Saturday is 7th child in default locale rows) */
+                        .react-datepicker__day-name:first-child,
+                        .react-datepicker__day-name:last-child,
+                        .react-datepicker__week .react-datepicker__day:first-child,
+                        .react-datepicker__week .react-datepicker__day:last-child {
+                            display: none;
                         }
-                        .has-data:hover {
-                            background-color: rgba(59, 130, 246, 0.6);
-                            color: white;
+                        
+                        /* Allow container to shrink since we removed columns */
+                        .react-datepicker {
+                            width: auto !important; 
+                        }
+                        .react-datepicker__month {
+                            margin: 0.4rem;
                         }
                     `}</style>
                 </div>

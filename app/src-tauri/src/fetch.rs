@@ -33,7 +33,6 @@ struct KoActPdf {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct KoActAsset {
-    risep: Option<String>,
     sec_nm: String,
     eval_a: String,
     apply_q: String,

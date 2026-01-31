@@ -32,7 +32,8 @@ if (!fs.existsSync(BIN_DIR)) {
     fs.mkdirSync(BIN_DIR, { recursive: true });
 }
 
-// 1. Build Sidecars
+// 1. Build Sidecars (Skipped for release build as per user request)
+/*
 console.log('\n--- Building Sidecars ---');
 for (const sidecar of SIDECARS) {
     const sidecarPath = path.join(SIDECAR_ROOT, sidecar);
@@ -61,29 +62,27 @@ for (const sidecar of SIDECARS) {
         process.exit(1);
     }
 }
+*/
 
-// 2. (Windows Only) Prepare Live DB for Bundling
+// 2. Prepare Live Database for Bundle
 let tempDbPath = null;
-if (os.platform() === 'win32') {
-    console.log('\n--- Preparing Live Database for Bundle (Windows) ---');
-    const appData = process.env.APPDATA;
-    if (appData) {
-        const liveDbPath = path.join(appData, 'com.juno.app', 'activeetf.db');
-        // Copy to src-tauri root so it can be picked up by "resources": ["activeetf.db"]
-        const targetDbPath = path.join(APP_DIR, 'src-tauri', 'activeetf.db');
+console.log('\n--- Preparing Database for Bundle ---');
+// Use the development database from target/debug if available
+const debugDbPath = path.join(APP_DIR, 'src-tauri', 'target', 'debug', 'activeetf.db');
+const targetDbPath = path.join(APP_DIR, 'src-tauri', 'activeetf.db');
 
-        if (fs.existsSync(liveDbPath)) {
-            try {
-                fs.copyFileSync(liveDbPath, targetDbPath);
-                tempDbPath = targetDbPath;
-                console.log(`   Copied live DB to build context: ${targetDbPath}`);
-            } catch (e) {
-                console.warn(`   Failed to prepare DB: ${e.message}`);
-            }
-        } else {
-            console.log('   No live database found to bundle (Skipping).');
-        }
+if (fs.existsSync(debugDbPath)) {
+    try {
+        console.log(`   Found dev DB at: ${debugDbPath}`);
+        // Copy to src-tauri root so it can be picked up by "resources": ["activeetf.db"]
+        fs.copyFileSync(debugDbPath, targetDbPath);
+        tempDbPath = targetDbPath;
+        console.log(`   Copied to build context: ${targetDbPath}`);
+    } catch (e) {
+        console.warn(`   Failed to prepare DB: ${e.message}`);
     }
+} else {
+    console.log('   No development database found in target/debug (Skipping).');
 }
 
 // 3. Build Tauri App
