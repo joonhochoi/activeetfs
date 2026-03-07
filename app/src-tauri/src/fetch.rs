@@ -70,6 +70,7 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn get_etf_holdings(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     provider: String,
     id: String,
@@ -79,7 +80,7 @@ pub async fn get_etf_holdings(
     // 1. 데이터 가져오기
     // 1. Fetch data
     let holdings = match provider.to_lowercase().as_str() {
-        "koact" | "kodex" => fetch_koact(&provider, &id, &code, &date).await.map_err(|e| e.to_string())?,
+        "koact" | "kodex" => fetch_koact(&app, &provider, &id, &code, &date).await.map_err(|e| e.to_string())?,
         "rise" => fetch_rise(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "plus" => fetch_plus(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "time" => fetch_time(&id, &code, &date).await.map_err(|e| e.to_string())?,
@@ -108,51 +109,151 @@ pub async fn get_etf_holdings(
     Ok(format!("Successfully updated {} holdings", holdings.len()))
 }
 
-// KoAct 및 Kodex 데이터 가져오기 (JSON API 사용)
-// Fetch KoAct/Kodex data using JSON API
-async fn fetch_koact(provider: &str, id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box<dyn std::error::Error>> {
-    // 날짜 형식 변환: YYYY-MM-DD -> YYYYMMDD
+// KoAct 및 Kodex 데이터 가져오기 (WebView 스크래퍼 사용)
+// Fetch KoAct/Kodex data using WebView to naturally bypass Cloudflare
+async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box<dyn std::error::Error>> {
     let clean_date = date.replace("-", "");
     
-    // URL 생성 (Go 코드 로직 참조)
+    // URL 생성
     let url = if provider.to_lowercase() == "kodex" {
         format!("https://www.samsungfund.com/api/v1/kodex/product-pdf/{}.do?gijunYMD={}", id, clean_date)
     } else {
         format!("https://www.samsungactive.co.kr/api/v1/product/etf-pdf/{}.do?gijunYMD={}", id, clean_date)
     };
 
-    // HTTP 클라이언트 생성
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-        .build()?;
+    use tauri::{WebviewUrl, WebviewWindowBuilder, Manager};
+    use tokio::sync::oneshot;
+    use std::sync::{Arc, Mutex};
 
-    // GET 요청 및 JSON 파싱
-    // Send GET request and parse JSON
-    let resp = client.get(&url).send().await?;
+    let (tx, rx) = oneshot::channel::<String>();
+    let tx_shared = Arc::new(Mutex::new(Some(tx)));
+    let tx_clone = tx_shared.clone();
     
-    // 상태 코드 확인
-    if !resp.status().is_success() {
-        return Err(format!("Bad status: {}", resp.status()).into());
-    }
+    let init_script = r#"
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const text = document.body.innerText;
+                const parsed = JSON.parse(text); // If this succeeds, it's our JSON!
+                const payload = encodeURIComponent(text);
+                window.location.href = 'http://localhost/scraper-data?json=' + payload;
+            } catch(e) {
+                // Not JSON -> Cloudflare challenge page!
+                // Inject bypass UI at the bottom
+                document.body.style.paddingBottom = '70px';
+                const bar = document.createElement('div');
+                bar.style.position = 'fixed';
+                bar.style.bottom = '0';
+                bar.style.left = '0';
+                bar.style.right = '0';
+                bar.style.height = '60px';
+                bar.style.padding = '0 20px';
+                bar.style.backgroundColor = '#1e293b';
+                bar.style.borderTop = '2px solid #3b82f6';
+                bar.style.color = '#f8fafc';
+                bar.style.display = 'flex';
+                bar.style.justifyContent = 'space-between';
+                bar.style.alignItems = 'center';
+                bar.style.zIndex = '2147483647';
+                bar.style.fontFamily = 'sans-serif';
+                bar.style.boxShadow = '0 -4px 15px rgba(0,0,0,0.5)';
 
-    // 디버그를 위해 텍스트로 먼저 받아서 출력해볼 수 있음 (필요 시)
-    // let text = resp.text().await?;
-    // println!("Response: {}", text);
-    // let parsed: KoActResponse = serde_json::from_str(&text)?;
+                const msg = document.createElement('div');
+                msg.innerHTML = '<span style="color:#fbbf24; font-size:1.2em; margin-right:8px;">⚠️</span> Cloudflare 보안(로봇 확인)을 통과한 후, 반드시 우측의 <b>완료</b> 버튼을 눌러주세요.';
+                msg.style.fontSize = '14px';
 
-    let parsed: KoActResponse = resp.json().await?;
+                const btn = document.createElement('button');
+                btn.innerText = '인증 완료 (계속하기)';
+                btn.style.padding = '10px 20px';
+                btn.style.backgroundColor = '#10b981';
+                btn.style.color = 'white';
+                btn.style.border = 'none';
+                btn.style.borderRadius = '6px';
+                btn.style.cursor = 'pointer';
+                btn.style.fontWeight = 'bold';
+                btn.style.fontSize = '14px';
+                
+                btn.onclick = () => {
+                    btn.innerText = '확인 중...';
+                    btn.style.backgroundColor = '#64748b';
+                    // Reload the page to test if Cloudflare is bypassed.
+                    // If bypassed, JSON will load successfully and be captured.
+                    window.location.reload(); 
+                };
+
+                bar.appendChild(msg);
+                bar.appendChild(btn);
+                document.body.appendChild(bar);
+
+                // 화면에 창을 보이게 하라고 Rust에 신호 전송
+                window.location.href = 'http://localhost/scraper-show';
+            }
+        });
+    "#;
+
+    let app_clone = app.clone();
+    let window_label = format!("koact-scraper-{}", chrono::Utc::now().timestamp_millis());
+    let window_label_clone = window_label.clone();
+    let window_label_show = window_label.clone();
+
+    let _window = WebviewWindowBuilder::new(
+        app,
+        &window_label,
+        WebviewUrl::External(url.parse().unwrap())
+    )
+    .title(format!("데이터 로딩 및 보안 확인... ({})", provider))
+    .inner_size(900.0, 700.0)
+    .visible(false) // 백그라운드에서 조용히 실행
+    .initialization_script(init_script)
+    .on_navigation(move |nav_url| {
+        let url_str = nav_url.as_str();
+        if url_str.starts_with("http://localhost/scraper-show") {
+            // Cloudflare에 걸렸으니 창을 보여주고 포커싱
+            if let Some(w) = app_clone.get_webview_window(&window_label_show) {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            return false;
+        } else if url_str.starts_with("http://localhost/scraper-data") {
+            for (key, value) in nav_url.query_pairs() {
+                if key == "json" {
+                    if let Some(tx) = tx_clone.lock().unwrap().take() {
+                        let _ = tx.send(value.into_owned());
+                    }
+                    break;
+                }
+            }
+            
+            // 창 닫기
+            if let Some(w) = app_clone.get_webview_window(&window_label_clone) {
+                let _ = w.close();
+            }
+            return false;
+        }
+        true
+    })
+    .build()?;
+
+    // Wait for the result or timeout after 60 seconds
+    let json_text = match tokio::time::timeout(tokio::time::Duration::from_secs(60), rx).await {
+        Ok(Ok(text)) => text,
+        Ok(Err(_)) => return Err("채널 연결이 끊어졌습니다.".into()),
+        Err(_) => {
+            // Timeout -> clean up window
+            if let Some(w) = app.get_webview_window(&window_label) {
+                let _ = w.close();
+            }
+            return Err("60초 타임아웃: 로봇 보안 인증을 제시간에 통과하지 못했습니다.".into());
+        }
+    };
+
+    let parsed: KoActResponse = serde_json::from_str(&json_text)?;
     
     // 응답 데이터를 Holding 구조체로 변환
-    // Convert response data to Holding structs
     let mut holdings = Vec::new();
     for item in parsed.pdf.list {
-        // 문자열 필드를 숫자로 파싱 (콤마 제거 등 필요 시 처리)
-        // Parse string numbers to appropriate types
         let qty = item.apply_q.replace(",", "").parse::<i64>().unwrap_or(0);
         let price = item.eval_a.replace(",", "").parse::<f64>().unwrap_or(0.0);
         
-        // ratio가 null일 수 있음
         let ratio_str = item.ratio.unwrap_or_else(|| "0".to_string());
         let weight = ratio_str.replace(",", "").parse::<f64>().unwrap_or(0.0);
 

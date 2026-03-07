@@ -1,24 +1,18 @@
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Sqlite, SqlitePool};
 use std::fs;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-pub async fn init_db(app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error::Error>> {
-    let mut db_path = app.path().app_data_dir().expect("failed to get app data dir").join("activeetf.db");
+pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error::Error>> {
+    // Force Portable Mode: Always use the directory containing the executable
+    let mut db_path = std::env::current_dir()?.join("activeetf.db"); // Fallback for dev
 
-    // Check if there is a DB file in the same directory as the executable (Portable Mode)
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            let portable_db = exe_dir.join("activeetf.db");
-            if portable_db.exists() {
-                db_path = portable_db;
-            }
+            db_path = exe_dir.join("activeetf.db");
         }
     }
 
-    // Attempt to ensure directory exists only if we are using the default app_data path?
-    // If we found a portable DB, likely the dir exists.
-    // If we are falling back to app_data, we need to create the dir.
-    // Since db_path is now resolved, we can check if its parent exists, and create if needed (for the default case).
+    // Ensure directory exists (though parent of exe usually exists)
     if let Some(parent) = db_path.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent)?;
