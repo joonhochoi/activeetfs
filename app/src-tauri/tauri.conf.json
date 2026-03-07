@@ -35,8 +35,6 @@
     "externalBin": [
       "binaries/get_pdfs"
     ],
-    "resources": [
-      "activeetf.db"
-    ]
+    "resources": []
   }
 }
