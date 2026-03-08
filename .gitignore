@@ -19,6 +19,7 @@ build/
 # Rust
 target/
 app/src-tauri/target/
+sidecars/
 
 # IDE
 .vscode/
