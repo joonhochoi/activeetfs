@@ -22,18 +22,23 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/joonhochoi/activeetfs/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4OEUwREYzOTkxRUI0RkIKUldUN3RCNlo4dzJPT0k2b05VdVduMDlvaUg3ZFVEMklESW1NeThlR0RxUXY0S3Q4eGxjcUx2YjYK"
+    }
+  },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "externalBin": [
-      "binaries/get_pdfs"
     ],
     "resources": []
   }
