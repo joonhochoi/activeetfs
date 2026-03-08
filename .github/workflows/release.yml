@@ -1,0 +1,49 @@
+name: Release Active ETF Viewer
+
+on:
+  push:
+    # v1.0.0 형태의 태그가 푸시될 때만 작동하도록 설정합니다. (안정성을 위해)
+    tags:
+      - 'v*'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    # 윈도우 환경 앱이므로 windows-latest 환경 사용
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Node.js 세팅
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 2. Rust 세팅
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # 3. 프론트엔드 의존성 설치
+      - name: Install Frontend Dependencies
+        working-directory: ./app
+        run: npm install
+
+      # 4. Tauri Action으로 빌드 및 릴리즈 (자동으로 latest.json 구성해줌)
+      - name: Build and Publish Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          projectPath: ./app     # Tauri 프로젝트 위치가 app 폴더이므로 명시
+          tagName: ${{ github.ref_name }} # v1.0.1 등 push한 태그 이름 사용
+          releaseName: 'Active ETF Viewer ${{ github.ref_name }}'
+          releaseBody: '설치 없이 압축을 풀고 단일 실행파일(exe)을 바로 실행하세요.'
+          releaseDraft: true     # 자동 공개할지 Draft로 남길지 결정 (false면 자동 공개)
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc --bundles "updater" # 포터블 모드를 위해 설치 관리자 생략하고 updater용 번들만 생성
