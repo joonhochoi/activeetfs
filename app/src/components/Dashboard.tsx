@@ -44,6 +44,9 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     const [updateCandidates, setUpdateCandidates] = useState<Set<string>>(new Set());
     const [scrapeProgress, setScrapeProgress] = useState<{ current: number, total: number } | null>(null);
     const [topN, setTopN] = useState<string>('10');
+    const [isExpanded, setIsExpanded] = useState<boolean>(false);
+    const [splitRatio, setSplitRatio] = useState<number>(35); // Default top grid takes 35% height
+    const [isDraggingSplit, setIsDraggingSplit] = useState<boolean>(false);
     // Chart Instance for Legend Interaction
     const chartRef = useRef<ReactECharts>(null);
     const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
@@ -208,7 +211,38 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             }
             window.removeEventListener('resize', handleResize);
         };
-    }, [isLogsOpen, holdings, seriesNames, highlightedSeries, viewStartDate, viewEndDate]);
+    }, [isLogsOpen, holdings, seriesNames, highlightedSeries, viewStartDate, viewEndDate, isExpanded, splitRatio]);
+
+    // Drag to resize split
+    useEffect(() => {
+        if (!isDraggingSplit) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const container = document.getElementById('chart-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            // Calculate percentage from top (limit between 20% and 80%)
+            let newRatio = ((e.clientY - rect.top) / rect.height) * 100;
+            newRatio = Math.max(20, Math.min(80, newRatio));
+            setSplitRatio(newRatio);
+        };
+
+        const handleMouseUp = () => {
+            setIsDraggingSplit(false);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        // Prevent generic text selection while dragging
+        document.body.style.userSelect = 'none';
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.userSelect = '';
+        };
+    }, [isDraggingSplit]);
 
     useEffect(() => {
         if (etfCode) {
@@ -469,45 +503,109 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
         const titleText = `Top ${topN === 'all' ? 'All' : topN} : ${relevantDates[0] || ''} ~ ${relevantDates[relevantDates.length - 1] || ''}`;
 
+        let hasSplit = false;
+        let topMin = 0;
+        let bottomMax = 0;
 
+        if (isExpanded) {
+            const visibleWeights: number[] = [];
+            holdings.forEach(h => {
+                if (relevantDates.includes(h.date) && seriesNames.includes(h.name) && !hiddenSeries.has(h.name)) {
+                    visibleWeights.push(h.weight);
+                }
+            });
+            visibleWeights.sort((a, b) => b - a);
+
+            let maxGap = 0;
+            let splitIndex = -1;
+            for (let i = 0; i < visibleWeights.length - 1; i++) {
+                const gap = visibleWeights[i] - visibleWeights[i + 1];
+                if (gap > maxGap) {
+                    maxGap = gap;
+                    splitIndex = i;
+                }
+            }
+
+            if (maxGap > 5 && splitIndex !== -1) {
+                hasSplit = true;
+                topMin = Math.max(0, Math.floor(visibleWeights[splitIndex] - 2));
+                bottomMax = Math.ceil(visibleWeights[splitIndex + 1] + 1);
+            }
+        }
+
+        const standardGrid = { left: '3%', right: '4%', bottom: '20px', top: '15%', containLabel: true };
+        const splitGrids = [
+            { left: '3%', right: '4%', bottom: `${100 - splitRatio + 2}%`, top: '12%', containLabel: true },
+            { left: '3%', right: '4%', bottom: '20px', top: `${splitRatio + 2}%`, containLabel: true }
+        ];
+
+        const standardXAxis = {
+            type: 'category',
+            boundaryGap: false,
+            data: relevantDates,
+            triggerEvent: true
+        };
+        const splitXAxes = [
+            { ...standardXAxis, gridIndex: 0, axisLabel: { show: false }, axisTick: { show: false } },
+            { ...standardXAxis, gridIndex: 1 }
+        ];
+
+        const standardYAxis = {
+            type: 'value',
+            min: (value: any) => Math.max(0, value.min - 5),
+            minInterval: 1,
+            axisLabel: { formatter: (value: number) => value.toFixed(0) }
+        };
+        const splitYAxes = [
+            {
+                type: 'value',
+                gridIndex: 0,
+                min: topMin,
+                minInterval: 1,
+                axisLabel: { formatter: (value: number) => value.toFixed(0) }
+            },
+            {
+                type: 'value',
+                gridIndex: 1,
+                max: bottomMax,
+                minInterval: 1,
+                axisLabel: { formatter: (value: number) => value.toFixed(0) }
+            }
+        ];
 
         return {
-            title: {
-                text: titleText,
-                left: 'center',
-                textStyle: { color: '#ccc', fontSize: 14 }
-            },
+            title: [
+                {
+                    text: titleText,
+                    left: 'center',
+                    textStyle: { color: '#ccc', fontSize: 14 }
+                }
+            ],
             tooltip: {
-                trigger: 'item', // Only trigger on elements (lines/points), not whitespace
+                trigger: 'item',
                 axisPointer: { type: 'cross' },
                 appendToBody: true,
                 confine: true,
                 extraCssText: 'border: 1px solid #444; background-color: rgba(0, 0, 0, 0.8);',
                 formatter: (params: any) => {
-                    const date = params.name; // In category axis, name is the category (Date)
+                    const date = params.name;
                     if (!date) return '';
 
                     const hoveredName = params.seriesName;
-
-                    // Manually find all holdings for this date that are currently visible on chart
                     const items = holdings.filter(h =>
                         h.date === date &&
                         seriesNames.includes(h.name) &&
                         !hiddenSeries.has(h.name)
                     );
-
-                    // Sort descending by value
                     items.sort((a, b) => b.weight - a.weight);
 
                     let html = `<div style="font-weight:bold; margin-bottom:5px;">${date}</div>`;
                     items.forEach((h: any) => {
-                        // Reconstruct marker color
                         const idx = seriesNames.indexOf(h.name);
                         const color = idx >= 0 ? COLOR_PALETTE[idx % COLOR_PALETTE.length] : '#ccc';
                         const marker = `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${color};"></span>`;
 
                         const isFocused = h.name === hoveredName;
-                        // specific style for the hovered item
                         const rowStyle = isFocused
                             ? 'font-weight:bold; color: #ff9999; background: rgba(255,255,255,0.15); border-radius: 4px;'
                             : '';
@@ -524,45 +622,31 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     return html;
                 }
             },
-            legend: {
-                show: false // Hide default legend
-            },
-            grid: { left: '3%', right: '4%', bottom: '20px', top: '15%', containLabel: true },
-            xAxis: {
-                type: 'category',
-                boundaryGap: false,
-                data: relevantDates,
-                triggerEvent: true // Enable clicking on axis labels
-            },
-            yAxis: {
-                type: 'value',
-                min: (value: any) => Math.max(0, value.min - 5),
-                minInterval: 1, // Force integer steps
-                axisLabel: {
-                    formatter: (value: number) => value.toFixed(0)
-                }
-            },
-            series: seriesNames.map((stockName) => {
+            legend: { show: false },
+            grid: hasSplit ? splitGrids : standardGrid,
+            xAxis: hasSplit ? splitXAxes : standardXAxis,
+            yAxis: hasSplit ? splitYAxes : standardYAxis,
+            series: seriesNames.flatMap((stockName) => {
                 const isHidden = hiddenSeries.has(stockName);
                 const isHighlighted = highlightedSeries === stockName;
                 const isDimmed = highlightedSeries !== null && !isHighlighted;
 
-                return {
-                    id: isHighlighted ? `${stockName}-highlighted` : stockName, // Changing ID triggers re-mount/animation
+                const seriesData = isHidden ? [] : relevantDates.map(d => {
+                    const h = holdings.find(item => item.date === d && item.name === stockName);
+                    return h ? h.weight : null;
+                });
+
+                const baseSeries = {
                     name: stockName,
                     type: 'line',
                     smooth: true,
-                    symbol: 'circle', // Must be a symbol to trigger 'item' tooltip
-                    symbolSize: 8,    // Large enough to be easily hovered
-                    itemStyle: {
-                        opacity: 0    // Invisible by default
-                    },
+                    symbol: 'circle',
+                    symbolSize: 8,
+                    itemStyle: { opacity: 0 },
                     emphasis: {
                         focus: 'series',
                         blurScope: 'coordinateSystem',
-                        itemStyle: {
-                            opacity: 1 // Visible on hover
-                        },
+                        itemStyle: { opacity: 1 },
                         scale: true
                     },
                     lineStyle: {
@@ -571,19 +655,26 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                         color: isDimmed ? '#555' : undefined
                     },
                     z: isHighlighted ? 10 : 2,
-                    data: isHidden ? [] : relevantDates.map(d => {
-                        const h = holdings.find(item => item.date === d && item.name === stockName);
-                        return h ? h.weight : null;
-                    }),
-                    // Only animate on Initial Load or when specifically Highlighted (drawing effect)
-                    // When reverting (isHighlighted=false, initial=done), snap instantly.
+                    data: seriesData,
                     animation: !initialAnimationComplete || isHighlighted,
-                    animationDuration: 500 // Faster animation to match interaction speed
+                    animationDuration: 500
+                };
+
+                if (hasSplit) {
+                    return [
+                        { ...baseSeries, id: `${stockName}-top${isHighlighted ? '-highlighted' : ''}`, xAxisIndex: 0, yAxisIndex: 0 },
+                        { ...baseSeries, id: `${stockName}-bottom${isHighlighted ? '-highlighted' : ''}`, xAxisIndex: 1, yAxisIndex: 1 }
+                    ];
+                }
+
+                return {
+                    ...baseSeries,
+                    id: isHighlighted ? `${stockName}-highlighted` : stockName
                 };
             }),
             color: COLOR_PALETTE
         };
-    }, [holdings, topN, viewStartDate, viewEndDate, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete]);
+    }, [holdings, topN, viewStartDate, viewEndDate, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete, isExpanded, splitRatio]);
 
     // Right Sidebar Logic
     useEffect(() => {
@@ -700,6 +791,15 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             <option value="all" style={{ background: '#1e293b' }}>All</option>
                         </select>
 
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#cbd5e1', cursor: 'pointer', fontSize: '0.9rem' }}>
+                            <input
+                                type="checkbox"
+                                checked={isExpanded}
+                                onChange={(e) => setIsExpanded(e.target.checked)}
+                            />
+                            확대
+                        </label>
+
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.05)', padding: '2px 5px', borderRadius: '4px' }}>
                             <DatePicker
                                 selected={viewStartDate}
@@ -815,7 +915,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                         <ReactECharts
                             ref={chartRef}
                             option={chartOption}
-                            style={{ height: '100%', width: '100%', flex: 1 }}
+                            style={{ height: '100%', width: '100%', flex: 1, pointerEvents: isDraggingSplit ? 'none' : 'auto' }}
                             theme="dark"
                             notMerge={true} // Critical: prevents ghost lines when series IDs change
                             onEvents={{
@@ -831,6 +931,47 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                                 }
                             }}
                         />
+                        {/* Draggable Divider for Split Mode */}
+                        {isExpanded && chartOption?.grid && Array.isArray(chartOption.grid) && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: `${splitRatio}%`,
+                                    left: '3%',
+                                    right: '4%',
+                                    height: '10px',
+                                    marginTop: '-5px', // Center it on the split line
+                                    cursor: 'row-resize',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 10
+                                }}
+                                onMouseDown={() => setIsDraggingSplit(true)}
+                            >
+                                {/* Invisible hit area is 10px tall, visible line is thinner */}
+                                <div style={{
+                                    width: '100%',
+                                    height: isDraggingSplit ? '2px' : '1px',
+                                    background: isDraggingSplit ? '#3b82f6' : 'rgba(100, 116, 139, 0.5)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background 0.2s'
+                                }}>
+                                    <span style={{
+                                        background: '#1e293b',
+                                        color: isDraggingSplit ? '#3b82f6' : '#64748b',
+                                        padding: '0 10px',
+                                        fontSize: '18px',
+                                        fontWeight: 'bold',
+                                        lineHeight: '10px'
+                                    }}>
+                                        ···
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

@@ -131,6 +131,9 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
     
     let init_script = r#"
         document.addEventListener('DOMContentLoaded', () => {
+            // iframe 내부에서는 실행하지 않음 (Cloudflare 위젯 위에 UI가 덮어씌워지는 문제 방지)
+            if (window !== window.top) return;
+
             try {
                 const text = document.body.innerText;
                 const parsed = JSON.parse(text); // If this succeeds, it's our JSON!

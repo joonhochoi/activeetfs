@@ -60,22 +60,19 @@ const UpdateAllWindow: React.FC = () => {
             const currentCount = i + 1;
             setProgress({ current: currentCount, total });
 
+            const commonArgs = (manager as any).common_args || [];
+            const etfArgs = etf.args || [];
+
+            const findArg = (args: string[], flag: string) => {
+                const idx = args.indexOf(flag);
+                return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
+            };
+
+            const provider = findArg(commonArgs, "--type") || manager.id;
+            const id = findArg(etfArgs, "--id");
+            const code = findArg(etfArgs, "--code") || etf.code;
+
             try {
-                // Construct args
-                // Extract arguments
-                const commonArgs = (manager as any).common_args || [];
-                const etfArgs = etf.args || [];
-
-                // Helper to find value after a flag
-                const findArg = (args: string[], flag: string) => {
-                    const idx = args.indexOf(flag);
-                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
-                };
-
-                const provider = findArg(commonArgs, "--type") || manager.id;
-                const id = findArg(etfArgs, "--id");
-                const code = findArg(etfArgs, "--code") || etf.code;
-
                 await invoke<string>('get_etf_holdings', {
                     provider,
                     id,
@@ -89,7 +86,7 @@ const UpdateAllWindow: React.FC = () => {
                 console.error(`Update failed for ${etf.name}:`, e);
             }
 
-            // Small delay to prevent UI freezing and ensure sequential execution is stable
+            // 모든 운용사에 대해 일괄적으로 200ms 대기 (Cloudflare 인터랙션 방지 위함)
             await new Promise(r => setTimeout(r, 200));
         }
 

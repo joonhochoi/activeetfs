@@ -43,6 +43,6 @@ jobs:
           projectPath: ./app     # Tauri 프로젝트 위치가 app 폴더이므로 명시
           tagName: ${{ github.ref_name }} # v1.0.1 등 push한 태그 이름 사용
           releaseName: 'Active ETFs ${{ github.ref_name }}'
-          releaseBody: '최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시고, 이후 업데이트는 앱 시작시 자동 체크하여 업데이트 가능합니다.<br>⚠️ 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. 이는 개인 개발자 보호 정책에 의한 것으로 안전합니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.'
+          releaseBody: '최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시고, 이후 업데이트는 앱 시작시 자동 체크하여 업데이트 가능합니다.<p>⚠️ 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. 이는 개인 개발자 보호 정책에 의한 것으로 안전합니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.'
           releaseDraft: true     # 자동 공개할지 Draft로 남길지 결정 (false면 자동 공개)
           prerelease: false
