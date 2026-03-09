@@ -6,19 +6,21 @@ use std::io::Write;
 use std::panic;
 
 fn main() {
-    panic::set_hook(Box::new(|panic_info| {
-        let mut log_path = std::path::PathBuf::from("crash.log");
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(parent) = exe_path.parent() {
-                log_path = parent.join("crash.log");
-            }
-        }
-        
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_path)
-            .unwrap_or_else(|_| std::fs::File::create("crash.log").unwrap());
+    let app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
+    let log_dir = std::path::PathBuf::from(app_data).join("com.juno.activeetfs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join("debug_startup.log");
+    
+    // Log app start
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
+        let _ = writeln!(f, "[APP START] Executable launched!");
+    }
+
+    panic::set_hook(Box::new(move |panic_info| {
+        let mut file = match OpenOptions::new().create(true).append(true).open(&log_path) {
+            Ok(f) => f,
+            Err(_) => return,
+        };
 
         let payload = panic_info.payload();
         let msg = if let Some(s) = payload.downcast_ref::<&str>() {
@@ -32,7 +34,7 @@ fn main() {
         let location = panic_info.location().unwrap();
         let _ = writeln!(
             file,
-            "Panic occurred at {}:{}:{}: {}",
+            "[PANIC] at {}:{}:{}: {}",
             location.file(),
             location.line(),
             location.column(),
