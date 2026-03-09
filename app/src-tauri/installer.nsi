@@ -6,11 +6,11 @@ ManifestDPIAware true
 ; https://github.com/tauri-apps/tauri/pull/10106
 ManifestDPIAwareness PerMonitorV2
 
-!if "lzma" == "none"
+!if "{{compression}}" == "none"
   SetCompress off
 !else
   ; Set the compression algorithm. We default to LZMA.
-  SetCompressor /SOLID "lzma"
+  SetCompressor /SOLID "{{compression}}"
 !endif
 
 !include MUI2.nsh
@@ -25,6 +25,9 @@ ManifestDPIAwareness PerMonitorV2
 ${StrCase}
 ${StrLoc}
 
+{{#if installer_hooks}}
+!include "{{installer_hooks}}"
+{{/if}}
 
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
@@ -39,12 +42,12 @@ ${StrLoc}
 !define SIDEBARIMAGE "{{sidebar_image}}"
 !define HEADERIMAGE "{{header_image}}"
 !define MAINBINARYNAME "{{main_binary_name}}"
-!define MAINBINARYSRCPATH "{{mainbinary_path}}"
+!define MAINBINARYSRCPATH "{{main_binary_path}}"
 !define BUNDLEID "{{bundle_id}}"
 !define COPYRIGHT "{{copyright}}"
 !define OUTFILE "{{out_file}}"
 !define ARCH "{{arch}}"
-!define ADDITIONALPLUGINSPATH "{{additional_plugins_path}}"
+!define PLUGINSPATH "{{additional_plugins_path}}"
 !define ALLOWDOWNGRADES "{{allow_downgrades}}"
 !define DISPLAYLANGUAGESELECTOR "{{display_language_selector}}"
 !define INSTALLWEBVIEW2MODE "{{install_webview2_mode}}"
@@ -53,8 +56,7 @@ ${StrLoc}
 !define WEBVIEW2INSTALLERPATH "{{webview2_installer_path}}"
 !define MINIMUMWEBVIEW2VERSION "{{minimum_webview2_version}}"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}"
-!define MANUKEY "Software\${MANUFACTURER}"
-!define MANUPRODUCTKEY "${MANUKEY}\${PRODUCTNAME}"
+!define MANUPRODUCTKEY "Software\${MANUFACTURER}\${PRODUCTNAME}"
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
@@ -82,8 +84,10 @@ VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 
-# additional plugins
-!addplugindir "${ADDITIONALPLUGINSPATH}"
+; Plugins path, currently exists for linux only
+!if "${PLUGINSPATH}" != ""
+    !addplugindir "${PLUGINSPATH}"
+!endif
 
 ; Uninstaller signing command
 !if "${UNINSTALLERSIGNCOMMAND}" != ""
@@ -92,7 +96,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 
 ; Handle install mode, `perUser`, `perMachine` or `both`
 !if "${INSTALLMODE}" == "perMachine"
-  RequestExecutionLevel admin
+  RequestExecutionLevel highest
 !endif
 
 !if "${INSTALLMODE}" == "currentUser"
@@ -379,19 +383,8 @@ Var AppStartMenuFolder
 ; Don't auto jump to finish page after installation page,
 ; because the installation page has useful info that can be used debug any issues with the installer.
 !define MUI_FINISHPAGE_NOAUTOCLOSE
-; Use show readme button in the finish page as a button create a desktop shortcut
-!define MUI_FINISHPAGE_SHOWREADME
-!define MUI_FINISHPAGE_SHOWREADME_TEXT "$(createDesktop)"
-!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateOrUpdateDesktopShortcut
-; Show run app after installation.
-!define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
-
-Function RunMainBinary
-  nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
-FunctionEnd
 
 ; Uninstaller Pages
 ; 1. Confirm uninstall page
@@ -439,9 +432,13 @@ FunctionEnd
 !insertmacro MUI_UNPAGE_INSTFILES
 
 ;Languages
-!insertmacro MUI_LANGUAGE "English"
+{{#each languages}}
+!insertmacro MUI_LANGUAGE "{{this}}"
+{{/each}}
 !insertmacro MUI_RESERVEFILE_LANGDLL
-  !include "C:\Users\juno\project\activeetfs\app\src-tauri\target\release\nsis\x64\English.nsh"
+{{#each language_files}}
+  !include "{{this}}"
+{{/each}}
 
 Function .onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
@@ -611,22 +608,38 @@ Section Install
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning
 
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
 
   ; Copy resources
-  {{{resources}}}
+  {{#each resources_dirs}}
+    CreateDirectory "$INSTDIR\\{{this}}"
+  {{/each}}
+  {{#each resources}}
+    File /a "/oname={{this.[1]}}" "{{@key}}"
+  {{/each}}
 
   ; Copy external binaries
-  {{{binaries}}}
+  {{#each binaries}}
+    File /a "/oname={{this}}" "{{@key}}"
+  {{/each}}
 
   ; Create file associations
-  {{{file_associations}}}
+  {{#each file_associations as |association| ~}}
+    {{#each association.ext as |ext| ~}}
+       !insertmacro APP_ASSOCIATE "{{ext}}" "{{or association.name ext}}" "{{association-description association.description ext}}" "$INSTDIR\${MAINBINARYNAME}.exe,0" "Open with ${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe $\"%1$\""
+    {{/each}}
+  {{/each}}
 
   ; Register deep links
-  {{{deep_links}}}
+  {{#each deep_link_protocols as |protocol| ~}}
+    WriteRegStr SHCTX "Software\Classes\\{{protocol}}" "URL Protocol" ""
+    WriteRegStr SHCTX "Software\Classes\\{{protocol}}" "" "URL:${BUNDLEID} protocol"
+    WriteRegStr SHCTX "Software\Classes\\{{protocol}}\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
+    WriteRegStr SHCTX "Software\Classes\\{{protocol}}\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+  {{/each}}
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -732,27 +745,44 @@ Section Uninstall
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
 
-  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro CheckIfAppIsRunning
 
   ; Delete the app directory and its content from disk
   ; Copy main executable
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"
 
   ; Delete resources
-  {{{uninstall_resources}}}
+  {{#each resources}}
+    Delete "$INSTDIR\\{{this.[1]}}"
+  {{/each}}
 
   ; Delete external binaries
-  {{{uninstall_binaries}}}
+  {{#each binaries}}
+    Delete "$INSTDIR\\{{this}}"
+  {{/each}}
 
   ; Delete app associations
-  {{{uninstall_file_associations}}}
+  {{#each file_associations as |association| ~}}
+    {{#each association.ext as |ext| ~}}
+      !insertmacro APP_UNASSOCIATE "{{ext}}" "{{or association.name ext}}"
+    {{/each}}
+  {{/each}}
 
   ; Delete deep links
-  {{{uninstall_deep_links}}}
+  {{#each deep_link_protocols as |protocol| ~}}
+    ReadRegStr $R7 SHCTX "Software\Classes\\{{protocol}}\shell\open\command" ""
+    ${If} $R7 == "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+      DeleteRegKey SHCTX "Software\Classes\\{{protocol}}"
+    ${EndIf}
+  {{/each}}
+
 
   ; Delete uninstaller
   Delete "$INSTDIR\uninstall.exe"
 
+  {{#each resources_ancestors}}
+  RMDir /REBOOTOK "$INSTDIR\\{{this}}"
+  {{/each}}
   RMDir "$INSTDIR"
 
   ; Remove shortcuts if not updating
@@ -793,27 +823,12 @@ Section Uninstall
     DeleteRegKey HKCU "${UNINSTKEY}"
   !endif
 
-  ; Removes the Autostart entry for ${PRODUCTNAME} from the HKCU Run key if it exists.
-  ; This ensures the program does not launch automatically after uninstallation if it exists.
-  ; If it doesn't exist, it does nothing.
-  ; We do this when not updating (to preserve the registry value on updates)
-  ${If} $UpdateMode <> 1
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
-  ${EndIf}
+  DeleteRegValue HKCU "${MANUPRODUCTKEY}" "Installer Language"
 
   ; Delete app data if the checkbox is selected
   ; and if not updating
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1
-    ; Clear the install location $INSTDIR from registry
-    DeleteRegKey SHCTX "${MANUPRODUCTKEY}"
-    DeleteRegKey /ifempty SHCTX "${MANUKEY}"
-
-    ; Clear the install language from registry
-    DeleteRegValue HKCU "${MANUPRODUCTKEY}" "Installer Language"
-    DeleteRegKey /ifempty HKCU "${MANUPRODUCTKEY}"
-    DeleteRegKey /ifempty HKCU "${MANUKEY}"
-
     SetShellVarContext current
     RmDir /r "$APPDATA\${BUNDLEID}"
     RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
