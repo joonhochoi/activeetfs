@@ -16,7 +16,7 @@ pub struct AppState {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(context: tauri::Context) {
     tauri::Builder::default()
         .setup(|app| {
             let handle = app.handle().clone();
@@ -41,6 +41,6 @@ pub fn run() {
             commands::toggle_etf_favorite,
             fetch::get_etf_holdings
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
