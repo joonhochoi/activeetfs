@@ -4,7 +4,7 @@ use tauri::AppHandle;
 
 pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error::Error>> {
     // Force Portable Mode: Always use the directory containing the executable
-    let mut db_path = std::env::current_dir()?.join("activeetf.db"); // Fallback for dev
+    let mut db_path = std::path::PathBuf::from("activeetf.db"); // Fallback for dev
 
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
