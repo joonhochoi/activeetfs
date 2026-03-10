@@ -2,7 +2,6 @@ name: Release Active ETF Viewer
 
 on:
   push:
-    # v1.0.0 형태의 태그가 푸시될 때만 작동하도록 설정합니다. (안정성을 위해)
     tags:
       - 'v*'
 
@@ -10,67 +9,109 @@ jobs:
   publish-tauri:
     permissions:
       contents: write
-    # 윈도우 환경 앱이므로 windows-latest 환경 사용
     runs-on: windows-latest
 
-    # 환경 변수를 job 레벨에 설정하여 모든 스텝과 자식 프로세스에서 사용 가능하게 함
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-      TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-      TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Node.js 세팅
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 2. Rust 세팅
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # 3. 프론트엔드 의존성 설치
       - name: Install Frontend Dependencies
         working-directory: ./app
         run: npm install
 
-      # 3.5. Tauri CLI를 crate 버전과 일치시켜 호환성 확보
       - name: Install matching Tauri CLI
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
-      # 디버그: 서명 키 환경 변수 존재 여부 확인
-      - name: Verify signing key is set
+      # 디버그: 서명 키 확인
+      - name: Verify signing key
         run: |
           if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY)) {
-            Write-Error "TAURI_SIGNING_PRIVATE_KEY is EMPTY or NOT SET!"
+            Write-Error "TAURI_SIGNING_PRIVATE_KEY is NOT SET!"
             exit 1
           } else {
-            $keyLen = $env:TAURI_SIGNING_PRIVATE_KEY.Length
-            $keyStart = $env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(20, $keyLen))
-            Write-Output "TAURI_SIGNING_PRIVATE_KEY is SET (length=$keyLen, starts with: $keyStart...)"
-          }
-          if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
-            Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is empty (no password)"
-          } else {
-            Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is SET (length=$($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length))"
+            Write-Output "TAURI_SIGNING_PRIVATE_KEY is SET (length=$($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
           }
         shell: pwsh
 
-      # 4. Tauri Action으로 빌드 및 릴리즈 (latest.json 자동 생성)
-      - name: Build and Publish Tauri App
-        uses: tauri-apps/tauri-action@v0
+      # tauri-action 대신 직접 빌드하여 환경변수 전달 문제 해결
+      - name: Build Tauri App
+        working-directory: ./app
+        run: npx tauri build
+        shell: pwsh
+
+      # 빌드 결과물 확인
+      - name: List build artifacts
+        run: |
+          Write-Output "=== Bundle contents ==="
+          Get-ChildItem -Path "app\src-tauri\target\release\bundle\nsis" -Recurse | ForEach-Object { Write-Output "$($_.FullName) ($($_.Length) bytes)" }
+        shell: pwsh
+
+      # GitHub Release 생성 및 파일 업로드
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
         with:
-          projectPath: ./app
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Active ETFs ${{ github.ref_name }}'
-          releaseBody: '최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시고, 이후 업데이트는 앱 시작시 자동 체크하여 업데이트 가능합니다.<p>⚠️ 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. 이는 개인 개발자 보호 정책에 의한 것으로 안전합니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.'
-          releaseDraft: false
+          tag_name: ${{ github.ref_name }}
+          name: 'Active ETFs ${{ github.ref_name }}'
+          body: '최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시고, 이후 업데이트는 앱 시작시 자동 체크하여 업데이트 가능합니다.<p>⚠️ 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. 이는 개인 개발자 보호 정책에 의한 것으로 안전합니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.'
+          draft: false
           prerelease: false
-          includeUpdaterJson: true
+          files: |
+            app/src-tauri/target/release/bundle/nsis/*.exe
+            app/src-tauri/target/release/bundle/nsis/*.sig
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip
+            app/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+
+      # latest.json 생성 및 업로드
+      - name: Generate and upload latest.json
+        run: |
+          $version = (Get-Content "app\src-tauri\tauri.conf.json" | ConvertFrom-Json).version
+          $nsisDir = "app\src-tauri\target\release\bundle\nsis"
+          
+          # .nsis.zip.sig 파일 찾기
+          $sigFile = Get-ChildItem -Path $nsisDir -Filter "*.nsis.zip.sig" | Select-Object -First 1
+          if (-not $sigFile) {
+            Write-Error "No .nsis.zip.sig file found! Signing failed."
+            Get-ChildItem -Path $nsisDir | ForEach-Object { Write-Output $_.Name }
+            exit 1
+          }
+          
+          $signature = Get-Content $sigFile.FullName -Raw
+          $zipFile = Get-ChildItem -Path $nsisDir -Filter "*.nsis.zip" | Where-Object { -not $_.Name.EndsWith(".sig") } | Select-Object -First 1
+          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($zipFile.Name)"
+          
+          $latest = @{
+            version = $version
+            notes = "Active ETFs ${{ github.ref_name }}"
+            pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature.Trim()
+                url = $downloadUrl
+              }
+            }
+          }
+          
+          $latest | ConvertTo-Json -Depth 4 | Set-Content "latest.json" -Encoding UTF8
+          Write-Output "=== latest.json content ==="
+          Get-Content "latest.json"
+        shell: pwsh
+
+      - name: Upload latest.json to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: latest.json
