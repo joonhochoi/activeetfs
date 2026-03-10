@@ -32,13 +32,22 @@ jobs:
         working-directory: ./app
         run: npm install
 
+      # 3.5. Tauri CLI를 crate 버전과 일치시켜 __TAURI_BUNDLE_TYPE 경고 해결
+      - name: Install matching Tauri CLI
+        working-directory: ./app
+        run: npm install @tauri-apps/cli@latest
+
       # 4. Tauri Action으로 빌드 및 릴리즈 (latest.json 자동 생성)
       - name: Build and Publish Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tauri v2 환경 변수 (tauri CLI가 읽음)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Tauri v1 호환 환경 변수 (tauri-action이 읽을 수 있음)
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           projectPath: ./app
           tagName: ${{ github.ref_name }}
