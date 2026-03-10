@@ -15,9 +15,7 @@
 
 <br>
 
-```markdown
 <img src="img/activeetf_v0.3.1.png" width="640" alt="v0.3.1 스크린샷" />
-```
 
 ## ✨ 주요 기능 (Key Features)
 
