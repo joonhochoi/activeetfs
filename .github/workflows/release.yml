@@ -14,7 +14,6 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -36,7 +35,7 @@ jobs:
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
-      # 서명 키 디코딩: base64 → minisign 원본 형식으로 변환 후 GITHUB_ENV에 직접 설정
+      # 서명 키 디코딩: base64 → minisign 원본 형식으로 변환
       - name: Decode signing key
         run: |
           $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
@@ -46,28 +45,54 @@ jobs:
             $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($keyContent))
             if ($decoded.StartsWith("untrusted comment:")) {
               Write-Output "Decoded OK: base64 -> minisign format (length=$($decoded.Length))"
-              # TAURI_SIGNING_PRIVATE_KEY 자체를 GITHUB_ENV로 덮어씌움 (이후 스텝에서 자동 적용)
               "TAURI_SIGNING_PRIVATE_KEY<<KEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
               $decoded.TrimEnd() | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 -NoNewline
               "`nKEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
               Write-Output "TAURI_SIGNING_PRIVATE_KEY overridden via GITHUB_ENV"
             } else {
-              Write-Output "WARNING: decoded content is not minisign format"
+              Write-Output "Not base64-wrapped minisign, using as-is"
             }
           } catch {
-            Write-Output "WARNING: key is not base64, using as-is"
+            Write-Output "Not base64, using as-is"
           }
         shell: pwsh
 
-      # 빌드 (GITHUB_ENV에서 덮어쓴 디코딩된 키가 자동으로 사용됨)
-      - name: Build Tauri App
+      # 서명 테스트: 빌드 전에 키와 패스워드가 올바른지 확인
+      - name: Test signing key
         working-directory: ./app
         run: |
           Write-Output "TAURI_SIGNING_PRIVATE_KEY length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
-          Write-Output "TAURI_SIGNING_PRIVATE_KEY starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(30, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
-          npx tauri build
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(40, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set: $(-not [string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD))"
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD length: $($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length)"
+
+          # 테스트 파일 생성 후 서명 시도
+          "test content" | Set-Content -Path "test_file.txt"
+          Write-Output "Attempting to sign test file..."
+          try {
+            npx tauri signer sign test_file.txt --verbose 2>&1 | ForEach-Object { Write-Output $_ }
+            Write-Output "Signing test PASSED!"
+          } catch {
+            Write-Output "Signing test FAILED: $_"
+            Write-Output "This means the private key or password is incorrect."
+          }
+
+          # 결과 확인
+          if (Test-Path "test_file.txt.sig") {
+            Write-Output "SUCCESS: test_file.txt.sig was created!"
+          } else {
+            Write-Output "FAIL: test_file.txt.sig was NOT created"
+            Write-Output "Signing will not work during build either."
+          }
         shell: pwsh
 
+      # 빌드
+      - name: Build Tauri App
+        working-directory: ./app
+        run: |
+          Write-Output "Starting tauri build with verbose..."
+          npx tauri build --verbose 2>&1 | ForEach-Object { Write-Output $_ }
+        shell: pwsh
 
       # 빌드 결과물 확인
       - name: List build artifacts
