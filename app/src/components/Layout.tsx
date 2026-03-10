@@ -161,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 disabled
                                 className="menu-item"
                             >
-                                Version Check
+                                Settings
                             </button>
                             <button
                                 onClick={openUpdateAllWindow}
