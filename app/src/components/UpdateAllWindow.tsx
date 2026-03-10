@@ -75,7 +75,7 @@ const UpdateAllWindow: React.FC = () => {
             try {
                 // Add a small initial delay for the first item to let the environment settle
                 if (i === 0) await new Promise(r => setTimeout(r, 500));
-                
+
                 await invoke<string>('get_etf_holdings', {
                     provider,
                     id,
@@ -90,7 +90,7 @@ const UpdateAllWindow: React.FC = () => {
             }
 
             // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 400));
         }
 
         setIsUpdating(false);

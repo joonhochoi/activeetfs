@@ -15,6 +15,10 @@
     "core:window:allow-maximize",
     "core:webview:allow-create-webview-window",
     "core:webview:allow-webview-close",
-    "opener:default"
+    "opener:default",
+    "updater:default",
+    "dialog:default",
+    "process:default",
+    "shell:default"
   ]
 }
