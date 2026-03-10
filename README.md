@@ -1,17 +1,17 @@
-# 📈 Active ETF Viewer
+# 📈 Active ETFs
 
-![Active ETF Viewer](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![Active ETFs](https://img.shields.io/badge/version-0.3.1-blue.svg)
 ![Tauri](https://img.shields.io/badge/Tauri-Rust-orange.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB.svg)
 
-**Active ETF Viewer**는 국내 다양한 자산운용사의 ETF(상장지수펀드) PDF(Portfolio Deposit File) 구성과 비중 변화를 손쉽게 수집하고, 직관적으로 시각화 및 비교 분석할 수 있는 **데스크톱 애플리케이션**입니다.
+**Active ETFs**는 국내 다양한 자산운용사의 ETF(상장지수펀드) PDF(Portfolio Deposit File) 구성과 비중 변화를 손쉽게 수집하고, 직관적으로 시각화 및 비교 분석할 수 있는 **데스크톱 애플리케이션**입니다.
 
 과거 내역과 현재 내역을 달력을 통해 대조하여 포트폴리오의 신규 편입과 편출 및 비중 변화를 한눈에 파악할 수 있으며, 자체 내장된 스크래핑 엔진을 통해 외부 서버 없이 빠르고 독립적으로 동작합니다.
 
 (라고 AI가 써준 소개글. 이하는 덧붙인 글)
 
 이 프로젝트는 본래 웹서버에서 동작시킬 용도로 스크래퍼 로직부터 만들어두고 방치하던걸 바이브 코딩으로 해보면 좀 쉽게 되려나로 시작된 개인 작업물입니다.
-프로젝트 개발 툴은 Antigravity 이며, 거의 90%이상의 코드는 Gemini 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
+프로젝트 개발 툴은 Antigravity 이며, 거의 90%이상의 코드는 Gemini+Opus 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
 
 <br>
 
