@@ -6,10 +6,19 @@ on:
       - 'v*'
 
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
-    runs-on: windows-latest
+  build-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: "x86_64-pc-windows-msvc"
+            args: ""
+          - platform: macos-latest
+            target: "universal-apple-darwin"
+            args: "--target universal-apple-darwin"
+
+    runs-on: ${{ matrix.platform }}
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -27,6 +36,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
 
       - name: Install Frontend Dependencies
         working-directory: ./app
@@ -41,8 +52,7 @@ jobs:
         working-directory: ./app
         run: |
           Write-Output "TAURI_SIGNING_PRIVATE_KEY length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
-          Write-Output "TAURI_SIGNING_PRIVATE_KEY starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(30, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
-
+          
           # 테스트 파일 서명
           "test" | Set-Content -Path "test_file.txt"
           npx tauri signer sign test_file.txt 2>&1 | ForEach-Object { Write-Output $_ }
@@ -58,50 +68,85 @@ jobs:
       # 빌드
       - name: Build Tauri App
         working-directory: ./app
-        run: npx tauri build
+        run: npx tauri build ${{ matrix.args }}
         shell: pwsh
 
-      # 빌드 결과물 확인
-      - name: List build artifacts
-        run: |
-          Write-Output "=== Bundle contents ==="
-          Get-ChildItem -Path "app\src-tauri\target\release\bundle\nsis" -Recurse | ForEach-Object { Write-Output "$($_.FullName) ($($_.Length) bytes)" }
-        shell: pwsh
+      # 빌드 결과물 업로드 (릴리즈 단계에서 통합하기 위함)
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.platform }}
+          path: |
+            app/src-tauri/target/**/bundle/nsis/*.exe
+            app/src-tauri/target/**/bundle/nsis/*.nsis.zip
+            app/src-tauri/target/**/bundle/nsis/*.sig
+            app/src-tauri/target/**/bundle/dmg/*.dmg
+            app/src-tauri/target/**/bundle/macos/*.app.tar.gz
+            app/src-tauri/target/**/bundle/macos/*.app.tar.gz.sig
 
-      # 5. latest.json 생성
+  publish-release:
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -R release-assets
+
+      # 5. latest.json 생성 (모든 플랫폼 통합)
       - name: Generate latest.json
+        shell: pwsh
         run: |
-          $version = (Get-Content "app\src-tauri\tauri.conf.json" | ConvertFrom-Json).version
-          $nsisDir = "app\src-tauri\target\release\bundle\nsis"
+          $version = (Get-Content "app/src-tauri/tauri.conf.json" | ConvertFrom-Json).version
+          $assetsDir = "release-assets"
           
-          # .nsis.zip.sig 파일을 찾아서 서명 추출
-          $sigFile = Get-ChildItem -Path $nsisDir -Filter "*.nsis.zip.sig" | Select-Object -First 1
-          if (-not $sigFile) {
-            Write-Error "No .nsis.zip.sig file found! Update payload signing failed."
-            Get-ChildItem -Path $nsisDir | ForEach-Object { Write-Output $_.Name }
-            exit 1
+          $platforms = @{}
+          
+          # Windows x86_64
+          $winZip = Get-ChildItem -Path $assetsDir -Filter "*.nsis.zip" | Where-Object { -not $_.Name.EndsWith(".sig") } | Select-Object -First 1
+          if ($winZip) {
+            $winSig = Get-Content (Join-Path $assetsDir "$($winZip.Name).sig") -Raw
+            $platforms["windows-x86_64"] = @{
+              signature = $winSig.Trim()
+              url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($winZip.Name)"
+            }
           }
           
-          $signature = Get-Content $sigFile.FullName -Raw
-          $zipFile = Get-ChildItem -Path $nsisDir -Filter "*.nsis.zip" | Where-Object { -not $_.Name.EndsWith(".sig") } | Select-Object -First 1
-          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($zipFile.Name)"
+          # MacOS (Universal binary handles both x86_64 and aarch64)
+          $macZip = Get-ChildItem -Path $assetsDir -Filter "*.app.tar.gz" | Where-Object { -not $_.Name.EndsWith(".sig") } | Select-Object -First 1
+          if ($macZip) {
+            $macSig = Get-Content (Join-Path $assetsDir "$($macZip.Name).sig") -Raw
+            $macUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($macZip.Name)"
+            
+            $platforms["darwin-x86_64"] = @{
+              signature = $macSig.Trim()
+              url = $macUrl
+            }
+            $platforms["darwin-aarch64"] = @{
+              signature = $macSig.Trim()
+              url = $macUrl
+            }
+          }
           
           $latest = @{
             version = $version
             notes = "Active ETFs ${{ github.ref_name }}"
             pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-            platforms = @{
-              "windows-x86_64" = @{
-                signature = $signature.Trim()
-                url = $downloadUrl
-              }
-            }
+            platforms = $platforms
           }
           
           $latest | ConvertTo-Json -Depth 4 | Set-Content "latest.json" -Encoding UTF8
           Write-Output "=== latest.json content ==="
           Get-Content "latest.json"
-        shell: pwsh
 
       # 6. GitHub Release 생성 및 모든 파일 통합 업로드
       - name: Create Release and Upload All Assets
@@ -113,7 +158,9 @@ jobs:
           draft: true
           prerelease: false
           files: |
-            app/src-tauri/target/release/bundle/nsis/*.exe
-            app/src-tauri/target/release/bundle/nsis/*.nsis.zip
-            app/src-tauri/target/release/bundle/nsis/*.sig
+            release-assets/*.exe
+            release-assets/*.nsis.zip
+            release-assets/*.dmg
+            release-assets/*.app.tar.gz
+            release-assets/*.sig
             latest.json

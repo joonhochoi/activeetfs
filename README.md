@@ -13,6 +13,10 @@
 이 프로젝트는 본래 웹서버에서 동작시킬 용도로 스크래퍼 로직부터 만들어두고 방치하던걸 바이브 코딩으로 해보면 좀 쉽게 되려나로 시작된 개인 작업물입니다.
 프로젝트 개발 툴은 Antigravity 이며, 거의 90%이상의 코드는 Gemini+Opus 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
 
+* Windows 용 설치 파일 : [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.1_x64-setup.exe)
+  * 최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시면 이후 업데이트는 앱 시작시 자동 체크하여 설치합니다. 
+  * 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.
+
 <br>
 
 <img src="https://github.com/joonhochoi/activeetfs/blob/0158c29cbc7e08b2b1b1658d2cf00ca26688bf0c/img/activeetfs_v0.3.1.png" width="980" alt="v0.3.1 스크린샷" />
