@@ -36,22 +36,46 @@ jobs:
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
-      # 디버그: 서명 키 확인
-      - name: Verify signing key
+      # 서명 키를 파일로 저장 (env var로 직접 전달 시 형식이 꼬질 수 있음)
+      - name: Write signing key to file
         run: |
-          if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY)) {
-            Write-Error "TAURI_SIGNING_PRIVATE_KEY is NOT SET!"
-            exit 1
-          } else {
-            Write-Output "TAURI_SIGNING_PRIVATE_KEY is SET (length=$($env:TAURI_SIGNING_PRIVATE_KEY.Length))"
+          $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
+          Write-Output "Key length: $($keyContent.Length)"
+          Write-Output "Key starts with: $($keyContent.Substring(0, [Math]::Min(30, $keyContent.Length)))"
+          Write-Output "Key ends with: $($keyContent.Substring([Math]::Max(0, $keyContent.Length - 10)))"
+          
+          # base64 디코딩 시도 (파일이 base64로 인코딩된 경우)
+          try {
+            $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($keyContent))
+            Write-Output "Decoded content starts with: $($decoded.Substring(0, [Math]::Min(50, $decoded.Length)))"
+            # 디코딩된 내용이 "untrusted comment:"으로 시작하면 원래 2줄짜리 키
+            if ($decoded.StartsWith("untrusted comment:")) {
+              Write-Output "Key is base64-wrapped minisign format. Writing decoded content to file."
+              $decoded | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
+            } else {
+              Write-Output "Key decoded but doesn't look like minisign format. Writing raw to file."
+              $keyContent | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
+            }
+          } catch {
+            Write-Output "Not valid base64. Writing raw content to file."
+            $keyContent | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
           }
+          
+          Write-Output "File written to: $env:RUNNER_TEMP\signing_key.key"
+          Write-Output "File size: $((Get-Item "$env:RUNNER_TEMP\signing_key.key").Length) bytes"
+          $fileHead = Get-Content "$env:RUNNER_TEMP\signing_key.key" -TotalCount 1
+          Write-Output "File first line: $fileHead"
         shell: pwsh
 
-      # tauri-action 대신 직접 빌드하여 환경변수 전달 문제 해결
+      # 빌드 (키를 파일 경로로 지정)
       - name: Build Tauri App
         working-directory: ./app
         run: npx tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}\signing_key.key
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         shell: pwsh
+
 
       # 빌드 결과물 확인
       - name: List build artifacts
