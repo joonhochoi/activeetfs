@@ -13,6 +13,14 @@ jobs:
     # 윈도우 환경 앱이므로 windows-latest 환경 사용
     runs-on: windows-latest
 
+    # 환경 변수를 job 레벨에 설정하여 모든 스텝과 자식 프로세스에서 사용 가능하게 함
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+      TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+      TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,22 +40,32 @@ jobs:
         working-directory: ./app
         run: npm install
 
-      # 3.5. Tauri CLI를 crate 버전과 일치시켜 __TAURI_BUNDLE_TYPE 경고 해결
+      # 3.5. Tauri CLI를 crate 버전과 일치시켜 호환성 확보
       - name: Install matching Tauri CLI
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
+      # 디버그: 서명 키 환경 변수 존재 여부 확인
+      - name: Verify signing key is set
+        run: |
+          if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Error "TAURI_SIGNING_PRIVATE_KEY is EMPTY or NOT SET!"
+            exit 1
+          } else {
+            $keyLen = $env:TAURI_SIGNING_PRIVATE_KEY.Length
+            $keyStart = $env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(20, $keyLen))
+            Write-Output "TAURI_SIGNING_PRIVATE_KEY is SET (length=$keyLen, starts with: $keyStart...)"
+          }
+          if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is empty (no password)"
+          } else {
+            Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is SET (length=$($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length))"
+          }
+        shell: pwsh
+
       # 4. Tauri Action으로 빌드 및 릴리즈 (latest.json 자동 생성)
       - name: Build and Publish Tauri App
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri v2 환경 변수 (tauri CLI가 읽음)
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          # Tauri v1 호환 환경 변수 (tauri-action이 읽을 수 있음)
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        uses: tauri-apps/tauri-action@v1
         with:
           projectPath: ./app
           tagName: ${{ github.ref_name }}
