@@ -36,43 +36,41 @@ jobs:
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
-      # 서명 키를 파일로 저장 (env var로 직접 전달 시 형식이 꼬질 수 있음)
-      - name: Write signing key to file
+      # 서명 키 디코딩 및 환경변수 재설정
+      - name: Decode and set signing key
         run: |
           $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
-          Write-Output "Key length: $($keyContent.Length)"
-          Write-Output "Key starts with: $($keyContent.Substring(0, [Math]::Min(30, $keyContent.Length)))"
-          Write-Output "Key ends with: $($keyContent.Substring([Math]::Max(0, $keyContent.Length - 10)))"
-          
-          # base64 디코딩 시도 (파일이 base64로 인코딩된 경우)
+          Write-Output "Raw key length: $($keyContent.Length)"
+
+          # base64 디코딩하여 원본 minisign 형식 복원
           try {
             $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($keyContent))
-            Write-Output "Decoded content starts with: $($decoded.Substring(0, [Math]::Min(50, $decoded.Length)))"
-            # 디코딩된 내용이 "untrusted comment:"으로 시작하면 원래 2줄짜리 키
             if ($decoded.StartsWith("untrusted comment:")) {
-              Write-Output "Key is base64-wrapped minisign format. Writing decoded content to file."
-              $decoded | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
+              Write-Output "Successfully decoded base64 -> minisign format"
+              # GITHUB_ENV를 통해 디코딩된 키를 multi-line env var로 설정
+              "TAURI_SIGNING_PRIVATE_KEY_DECODED<<KEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              $decoded.TrimEnd() | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 -NoNewline
+              "`nKEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              Write-Output "Key set via GITHUB_ENV (decoded minisign format)"
             } else {
-              Write-Output "Key decoded but doesn't look like minisign format. Writing raw to file."
-              $keyContent | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
+              Write-Output "Decoded but not minisign format, using raw"
+              "TAURI_SIGNING_PRIVATE_KEY_DECODED=$keyContent" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
             }
           } catch {
-            Write-Output "Not valid base64. Writing raw content to file."
-            $keyContent | Set-Content -Path "$env:RUNNER_TEMP\signing_key.key" -NoNewline -Encoding UTF8
+            Write-Output "Not base64, using raw value"
+            "TAURI_SIGNING_PRIVATE_KEY_DECODED=$keyContent" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           }
-          
-          Write-Output "File written to: $env:RUNNER_TEMP\signing_key.key"
-          Write-Output "File size: $((Get-Item "$env:RUNNER_TEMP\signing_key.key").Length) bytes"
-          $fileHead = Get-Content "$env:RUNNER_TEMP\signing_key.key" -TotalCount 1
-          Write-Output "File first line: $fileHead"
         shell: pwsh
 
-      # 빌드 (키를 파일 경로로 지정)
+      # 빌드 (디코딩된 키 사용)
       - name: Build Tauri App
         working-directory: ./app
-        run: npx tauri build
+        run: |
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY first 50 chars: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(50, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
+          npx tauri build
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}\signing_key.key
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_SIGNING_PRIVATE_KEY_DECODED }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         shell: pwsh
 
