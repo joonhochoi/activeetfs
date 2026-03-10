@@ -65,7 +65,7 @@ jobs:
 
       # 4. Tauri Action으로 빌드 및 릴리즈 (latest.json 자동 생성)
       - name: Build and Publish Tauri App
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@v0
         with:
           projectPath: ./app
           tagName: ${{ github.ref_name }}
