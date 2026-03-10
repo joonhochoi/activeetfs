@@ -35,63 +35,29 @@ jobs:
         working-directory: ./app
         run: npm install @tauri-apps/cli@latest
 
-      # 서명 키 디코딩: base64 → minisign 원본 형식으로 변환
-      - name: Decode signing key
-        run: |
-          $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY
-          Write-Output "Raw key length: $($keyContent.Length)"
-
-          try {
-            $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($keyContent))
-            if ($decoded.StartsWith("untrusted comment:")) {
-              Write-Output "Decoded OK: base64 -> minisign format (length=$($decoded.Length))"
-              "TAURI_SIGNING_PRIVATE_KEY<<KEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-              $decoded.TrimEnd() | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 -NoNewline
-              "`nKEYEOF" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-              Write-Output "TAURI_SIGNING_PRIVATE_KEY overridden via GITHUB_ENV"
-            } else {
-              Write-Output "Not base64-wrapped minisign, using as-is"
-            }
-          } catch {
-            Write-Output "Not base64, using as-is"
-          }
-        shell: pwsh
-
-      # 서명 테스트: 빌드 전에 키와 패스워드가 올바른지 확인
+      # 서명 테스트: 빌드 전에 키가 올바른지 확인
       - name: Test signing key
         working-directory: ./app
         run: |
           Write-Output "TAURI_SIGNING_PRIVATE_KEY length: $($env:TAURI_SIGNING_PRIVATE_KEY.Length)"
-          Write-Output "TAURI_SIGNING_PRIVATE_KEY starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(40, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
-          Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is set: $(-not [string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD))"
-          Write-Output "TAURI_SIGNING_PRIVATE_KEY_PASSWORD length: $($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD.Length)"
+          Write-Output "TAURI_SIGNING_PRIVATE_KEY starts with: $($env:TAURI_SIGNING_PRIVATE_KEY.Substring(0, [Math]::Min(30, $env:TAURI_SIGNING_PRIVATE_KEY.Length)))"
 
-          # 테스트 파일 생성 후 서명 시도
-          "test content" | Set-Content -Path "test_file.txt"
-          Write-Output "Attempting to sign test file..."
-          try {
-            npx tauri signer sign test_file.txt --verbose 2>&1 | ForEach-Object { Write-Output $_ }
-            Write-Output "Signing test PASSED!"
-          } catch {
-            Write-Output "Signing test FAILED: $_"
-            Write-Output "This means the private key or password is incorrect."
-          }
+          # 테스트 파일 서명
+          "test" | Set-Content -Path "test_file.txt"
+          npx tauri signer sign test_file.txt 2>&1 | ForEach-Object { Write-Output $_ }
 
-          # 결과 확인
           if (Test-Path "test_file.txt.sig") {
-            Write-Output "SUCCESS: test_file.txt.sig was created!"
+            Write-Output "SIGN TEST PASSED! .sig file created."
           } else {
-            Write-Output "FAIL: test_file.txt.sig was NOT created"
-            Write-Output "Signing will not work during build either."
+            Write-Output "SIGN TEST FAILED! No .sig file."
+            exit 1
           }
         shell: pwsh
 
       # 빌드
       - name: Build Tauri App
         working-directory: ./app
-        run: |
-          Write-Output "Starting tauri build with verbose..."
-          npx tauri build --verbose 2>&1 | ForEach-Object { Write-Output $_ }
+        run: npx tauri build
         shell: pwsh
 
       # 빌드 결과물 확인
@@ -122,7 +88,6 @@ jobs:
           $version = (Get-Content "app\src-tauri\tauri.conf.json" | ConvertFrom-Json).version
           $nsisDir = "app\src-tauri\target\release\bundle\nsis"
           
-          # .nsis.zip.sig 파일 찾기
           $sigFile = Get-ChildItem -Path $nsisDir -Filter "*.nsis.zip.sig" | Select-Object -First 1
           if (-not $sigFile) {
             Write-Error "No .nsis.zip.sig file found! Signing failed."
