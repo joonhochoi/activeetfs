@@ -489,6 +489,42 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
     // Series Names & Toggle Logic Moved Up
 
+    // Pre-compute whether split view is possible (maxGap > 5%p threshold)
+    const canSplit = useMemo(() => {
+        if (!holdings.length) return false;
+
+        const dates = Array.from(new Set(holdings.map(h => h.date))).sort();
+        const relevantDates = dates.filter(d => {
+            const dDate = new Date(d);
+            if (viewStartDate && dDate < viewStartDate) return false;
+            if (viewEndDate && dDate > viewEndDate) return false;
+            return true;
+        });
+
+        const visibleWeights: number[] = [];
+        holdings.forEach(h => {
+            if (relevantDates.includes(h.date) && seriesNames.includes(h.name) && !hiddenSeries.has(h.name)) {
+                visibleWeights.push(h.weight);
+            }
+        });
+        visibleWeights.sort((a, b) => b - a);
+
+        let maxGap = 0;
+        for (let i = 0; i < visibleWeights.length - 1; i++) {
+            const gap = visibleWeights[i] - visibleWeights[i + 1];
+            if (gap > maxGap) maxGap = gap;
+        }
+
+        return maxGap > 5;
+    }, [holdings, viewStartDate, viewEndDate, seriesNames, hiddenSeries]);
+
+    // Auto-disable expanded mode when split becomes impossible
+    useEffect(() => {
+        if (!canSplit && isExpanded) {
+            setIsExpanded(false);
+        }
+    }, [canSplit]);
+
     // Calculate Chart Data
     const chartOption = useMemo(() => {
         if (!holdings.length) return {};
@@ -791,10 +827,23 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             <option value="all" style={{ background: '#1e293b' }}>All</option>
                         </select>
 
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#cbd5e1', cursor: 'pointer', fontSize: '0.9rem' }}>
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                color: canSplit ? '#cbd5e1' : '#475569',
+                                cursor: canSplit ? 'pointer' : 'not-allowed',
+                                fontSize: '0.9rem',
+                                opacity: canSplit ? 1 : 0.5,
+                                transition: 'opacity 0.2s'
+                            }}
+                            title={canSplit ? '종목 간 비중 차이가 큰 구간을 분리하여 표시합니다' : '확대 불가: 종목 간 비중 차이가 5%p를 초과하는 구간이 없습니다'}
+                        >
                             <input
                                 type="checkbox"
                                 checked={isExpanded}
+                                disabled={!canSplit}
                                 onChange={(e) => setIsExpanded(e.target.checked)}
                             />
                             확대

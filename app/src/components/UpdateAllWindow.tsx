@@ -13,10 +13,10 @@ interface LogItem {
 }
 
 const UpdateAllWindow: React.FC = () => {
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
     const [logs, setLogs] = useState<LogItem[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);
-    const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+    const [progress, setProgress] = useState<{ currentDate: string; currentEtf: number; totalEtfs: number; currentDateIdx: number; totalDates: number } | null>(null);
     const logsEndRef = useRef<HTMLDivElement>(null);
 
     const [isComplete, setIsComplete] = useState(false);
@@ -38,9 +38,28 @@ const UpdateAllWindow: React.FC = () => {
         return `${year}-${month}-${day}`;
     };
 
+    const toggleDate = (date: Date) => {
+        const dateStr = toLocalDateString(date);
+        setSelectedDates(prev => {
+            const next = new Set(prev);
+            if (next.has(dateStr)) next.delete(dateStr);
+            else next.add(dateStr);
+            return next;
+        });
+    };
+
+    const clearDates = () => {
+        setSelectedDates(new Set());
+    };
+
+    const sortedSelectedDates = Array.from(selectedDates).sort();
+
     const handleUpdateAll = async () => {
+        if (sortedSelectedDates.length === 0) return;
+
         setIsUpdating(true);
         setLogs([]);
+        setIsComplete(false);
 
         const allEtfs: { manager: any, etf: any }[] = [];
         activeEtfInfos.managers.forEach(manager => {
@@ -49,48 +68,59 @@ const UpdateAllWindow: React.FC = () => {
             });
         });
 
-        const total = allEtfs.length;
-        const targetDateStr = toLocalDateString(selectedDate);
-        setProgress({ current: 0, total });
+        const totalEtfs = allEtfs.length;
+        const totalDates = sortedSelectedDates.length;
 
-        addLog(`Starting batch update for date: ${targetDateStr}...`, 'pending');
+        addLog(`Starting batch update for ${totalDates} date(s): ${sortedSelectedDates.join(', ')}`, 'pending');
 
-        for (let i = 0; i < total; i++) {
-            const { manager, etf } = allEtfs[i];
-            const currentCount = i + 1;
-            setProgress({ current: currentCount, total });
+        for (let d = 0; d < totalDates; d++) {
+            const targetDateStr = sortedSelectedDates[d];
+            addLog(`\n━━━ [${d + 1}/${totalDates}] Date: ${targetDateStr} ━━━`, 'pending');
 
-            const commonArgs = (manager as any).common_args || [];
-            const etfArgs = etf.args || [];
-
-            const findArg = (args: string[], flag: string) => {
-                const idx = args.indexOf(flag);
-                return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
-            };
-
-            const provider = findArg(commonArgs, "--type") || manager.id;
-            const id = findArg(etfArgs, "--id");
-            const code = findArg(etfArgs, "--code") || etf.code;
-
-            try {
-                // Add a small initial delay for the first item to let the environment settle
-                if (i === 0) await new Promise(r => setTimeout(r, 500));
-
-                await invoke<string>('get_etf_holdings', {
-                    provider,
-                    id,
-                    code,
-                    date: targetDateStr
+            for (let i = 0; i < totalEtfs; i++) {
+                const { manager, etf } = allEtfs[i];
+                setProgress({
+                    currentDate: targetDateStr,
+                    currentEtf: i + 1,
+                    totalEtfs,
+                    currentDateIdx: d + 1,
+                    totalDates
                 });
 
-                addLog(`[${etf.name}] 데이터 가져오기 ... [성공]`, 'success');
-            } catch (e) {
-                addLog(`[${etf.name}] 데이터 가져오기 ... [실패: ${e}]`, 'error');
-                console.error(`Update failed for ${etf.name}:`, e);
+                const commonArgs = (manager as any).common_args || [];
+                const etfArgs = etf.args || [];
+
+                const findArg = (args: string[], flag: string) => {
+                    const idx = args.indexOf(flag);
+                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
+                };
+
+                const provider = findArg(commonArgs, "--type") || manager.id;
+                const id = findArg(etfArgs, "--id");
+                const code = findArg(etfArgs, "--code") || etf.code;
+
+                try {
+                    // Add a small initial delay for the first item to let the environment settle
+                    if (d === 0 && i === 0) await new Promise(r => setTimeout(r, 500));
+
+                    await invoke<string>('get_etf_holdings', {
+                        provider,
+                        id,
+                        code,
+                        date: targetDateStr
+                    });
+
+                    addLog(`[${etf.name}] 데이터 가져오기 ... [성공]`, 'success');
+                } catch (e) {
+                    addLog(`[${etf.name}] 데이터 가져오기 ... [실패: ${e}]`, 'error');
+                    console.error(`Update failed for ${etf.name}:`, e);
+                }
+
+                // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보
+                await new Promise(r => setTimeout(r, 400));
             }
 
-            // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보
-            await new Promise(r => setTimeout(r, 400));
+            addLog(`━━━ Date ${targetDateStr} complete ━━━`, 'success');
         }
 
         setIsUpdating(false);
@@ -104,6 +134,11 @@ const UpdateAllWindow: React.FC = () => {
         await getCurrentWindow().close();
     };
 
+    // Progress display text
+    const progressText = progress
+        ? `Date ${progress.currentDateIdx}/${progress.totalDates} (${progress.currentDate}) - ETF ${progress.currentEtf}/${progress.totalEtfs}`
+        : '';
+
     return (
         <div style={{
             padding: '20px',
@@ -115,17 +150,96 @@ const UpdateAllWindow: React.FC = () => {
             position: 'relative'
         }}>
             <h2 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
-                Update All (1day)
+                Update All (Multi-Date)
             </h2>
 
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'flex-start' }}>
                 <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: '#94a3b8' }}>Select Date:</label>
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#94a3b8' }}>
+                        Select Dates:
+                        {selectedDates.size > 0 && (
+                            <span style={{
+                                marginLeft: '8px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold'
+                            }}>
+                                {selectedDates.size}
+                            </span>
+                        )}
+                    </label>
                     <DatePicker
-                        selected={selectedDate}
-                        onChange={(date: Date | null) => { if (date) setSelectedDate(date); }}
+                        selected={null}
+                        onChange={(date: Date | null) => { if (date) toggleDate(date); }}
                         inline
+                        shouldCloseOnSelect={false}
+                        dayClassName={(date: Date) => {
+                            const dStr = toLocalDateString(date);
+                            if (selectedDates.has(dStr)) return 'update-all-selected-date';
+                            return "";
+                        }}
                     />
+                    {/* Selected dates chips */}
+                    {selectedDates.size > 0 && (
+                        <div style={{
+                            marginTop: '8px',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '4px',
+                            maxWidth: '250px'
+                        }}>
+                            {sortedSelectedDates.map(dateStr => (
+                                <span
+                                    key={dateStr}
+                                    onClick={() => {
+                                        if (!isUpdating) {
+                                            setSelectedDates(prev => {
+                                                const next = new Set(prev);
+                                                next.delete(dateStr);
+                                                return next;
+                                            });
+                                        }
+                                    }}
+                                    style={{
+                                        background: 'rgba(59, 130, 246, 0.2)',
+                                        border: '1px solid rgba(59, 130, 246, 0.4)',
+                                        color: '#93c5fd',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        cursor: isUpdating ? 'default' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    {dateStr}
+                                    {!isUpdating && <span style={{ color: '#64748b', fontSize: '0.7rem' }}>✕</span>}
+                                </span>
+                            ))}
+                            {!isUpdating && selectedDates.size > 1 && (
+                                <span
+                                    onClick={clearDates}
+                                    style={{
+                                        background: 'rgba(239, 68, 68, 0.15)',
+                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                        color: '#fca5a5',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    Clear All
+                                </span>
+                            )}
+                        </div>
+                    )}
                     <style>{`
                         .react-datepicker {
                             font-family: 'Inter', system-ui, sans-serif;
@@ -144,14 +258,23 @@ const UpdateAllWindow: React.FC = () => {
                             color: #cbd5e1;
                         }
                         .react-datepicker__day:hover {
-                            background-color: rgba(59, 130, 246, 0.5);
+                            background-color: rgba(59, 130, 246, 0.3);
                         }
                         .react-datepicker__day--selected {
-                            background-color: #3b82f6;
-                            color: white;
+                            background-color: transparent;
+                            color: #cbd5e1;
                         }
                         .react-datepicker__day--keyboard-selected {
-                            background-color: rgba(59, 130, 246, 0.5);
+                            background-color: transparent;
+                        }
+                        .update-all-selected-date {
+                            background-color: #3b82f6 !important;
+                            color: white !important;
+                            border-radius: 4px;
+                            font-weight: bold;
+                        }
+                        .update-all-selected-date:hover {
+                            background-color: #2563eb !important;
                         }
 
                         /* Hide weekends (Sunday is 1st, Saturday is 7th child in default locale rows) */
@@ -186,8 +309,8 @@ const UpdateAllWindow: React.FC = () => {
                     }}>
                         <div style={{ marginBottom: '10px', color: '#94a3b8', fontSize: '0.9rem' }}>
                             Progress Log
-                            {progress && <span style={{ float: 'right', color: '#60a5fa' }}>
-                                Processing: {progress.current} / {progress.total}
+                            {progress && <span style={{ float: 'right', color: '#60a5fa', fontSize: '0.85rem' }}>
+                                {progressText}
                             </span>}
                         </div>
                         <div style={{
@@ -214,23 +337,29 @@ const UpdateAllWindow: React.FC = () => {
 
                     <button
                         onClick={handleUpdateAll}
-                        disabled={isUpdating}
+                        disabled={isUpdating || selectedDates.size === 0}
                         style={{
                             padding: '12px',
-                            background: isUpdating ? '#475569' : '#3b82f6',
+                            background: (isUpdating || selectedDates.size === 0) ? '#475569' : '#3b82f6',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
-                            cursor: isUpdating ? 'not-allowed' : 'pointer',
+                            cursor: (isUpdating || selectedDates.size === 0) ? 'not-allowed' : 'pointer',
                             fontSize: '1rem',
                             fontWeight: 'bold',
-                            marginTop: 'auto'
+                            marginTop: 'auto',
+                            opacity: (isUpdating || selectedDates.size === 0) ? 0.7 : 1,
+                            transition: 'all 0.2s'
                         }}
                     >
-                        {isUpdating ? `Updating... (${progress?.current}/${progress?.total})` : 'Update All'}
+                        {isUpdating
+                            ? `Updating... ${progressText}`
+                            : selectedDates.size > 0
+                                ? `Update All (${selectedDates.size} date${selectedDates.size > 1 ? 's' : ''})`
+                                : 'Select dates to update'}
                     </button>
                     <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '5px' }}>
-                        * 여러 ETF를 순차적으로 업데이트하므로 시간이 소요될 수 있습니다.
+                        * 달력에서 날짜를 클릭하여 여러 날짜를 선택할 수 있습니다. 선택된 날짜별로 순차적으로 전체 ETF를 업데이트합니다.
                     </p>
                 </div>
             </div>
@@ -265,7 +394,7 @@ const UpdateAllWindow: React.FC = () => {
                             완료!
                         </h3>
                         <p style={{ color: '#cbd5e1', marginBottom: '25px' }}>
-                            모든 ETF의 업데이트가 성공적으로 완료되었습니다.
+                            {sortedSelectedDates.length}개 날짜에 대한 모든 ETF 업데이트가 완료되었습니다.
                         </p>
                         <button
                             onClick={handleClose}

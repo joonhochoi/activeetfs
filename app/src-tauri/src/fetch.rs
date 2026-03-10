@@ -140,11 +140,19 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
                 window.location.href = url;
             };
 
+            // Retry counter via sessionStorage to prevent infinite reload loops
+            const RETRY_KEY = '__CF_RETRY_COUNT__';
+            const MAX_RETRIES = 3;
+            const getRetryCount = () => parseInt(sessionStorage.getItem(RETRY_KEY) || '0', 10);
+            const incrementRetry = () => sessionStorage.setItem(RETRY_KEY, String(getRetryCount() + 1));
+            const clearRetries = () => sessionStorage.removeItem(RETRY_KEY);
+
             async function run() {
                 const text = document.body.innerText.trim();
                 const isProbablyJson = document.contentType === 'application/json' || text.startsWith('{') || text.startsWith('[');
                 
                 if (isProbablyJson) {
+                    clearRetries(); // Success path - reset counter
                     try {
                         const resp = await fetch(window.location.href, { cache: 'no-store' });
                         if (resp.ok) {
@@ -159,8 +167,22 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
                     // Fallback to current text if fetch fails
                     signal('data', text);
                 } else if (text.includes('Cloudflare') || text.includes('DDoS') || text.includes('Challenge') || text.length < 50) {
-                    // Show window for Cloudflare or if page seems empty/loading
-                    // Add UI bar
+                    const retries = getRetryCount();
+
+                    // Check if Cloudflare challenge already passed but page is stuck
+                    // ("확인에 성공했습니다" = verification successful, "기다리는" = waiting)
+                    const isStuckAfterPass = text.includes('성공') || text.includes('기다리는') || text.includes('Waiting');
+                    
+                    if (isStuckAfterPass && retries < MAX_RETRIES) {
+                        // Auto-reload after a short delay to let Cloudflare session settle
+                        console.log('[Scraper] CF passed but stuck, auto-reloading... (attempt ' + (retries + 1) + '/' + MAX_RETRIES + ')');
+                        incrementRetry();
+                        setTimeout(() => { window.location.reload(); }, 5000);
+                        return; // Don't show window yet, let auto-reload attempt
+                    }
+
+                    // Either not stuck-after-pass, or retries exhausted -> show manual UI
+                    // Add UI bar for manual intervention
                     document.body.style.paddingBottom = '70px';
                     const bar = document.createElement('div');
                     bar.style.cssText = 'position:fixed; bottom:0; left:0; right:0; height:60px; padding:0 20px; background:#1e293b; border-top:2px solid #3b82f6; color:#f8fafc; display:flex; justify-content:space-between; align-items:center; z-index:2147483647; font-family:sans-serif; box-shadow:0 -4px 15px rgba(0,0,0,0.5);';
@@ -169,7 +191,7 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
                     const btn = document.createElement('button');
                     btn.innerText = '인증 완료 (계속하기)';
                     btn.style.cssText = 'padding:10px 20px; background:#10b981; color:white; border:none; borderRadius:6px; cursor:pointer; fontWeight:bold;';
-                    btn.onclick = () => { window.location.reload(); };
+                    btn.onclick = () => { clearRetries(); window.location.reload(); };
                     
                     bar.appendChild(btn);
                     document.body.appendChild(bar);
