@@ -130,67 +130,63 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
     let tx_clone = tx_shared.clone();
     
     let init_script = r#"
-        document.addEventListener('DOMContentLoaded', () => {
-            // iframe 내부에서는 실행하지 않음 (Cloudflare 위젯 위에 UI가 덮어씌워지는 문제 방지)
+        (function() {
             if (window !== window.top) return;
+            if (window.__SCRAPER_STARTED__) return;
+            window.__SCRAPER_STARTED__ = true;
 
-            try {
-                const text = document.body.innerText;
-                const parsed = JSON.parse(text); // If this succeeds, it's our JSON!
-                const payload = encodeURIComponent(text);
-                window.location.href = 'http://localhost/scraper-data?json=' + payload;
-            } catch(e) {
-                // Not JSON -> Cloudflare challenge page!
-                // Inject bypass UI at the bottom
-                document.body.style.paddingBottom = '70px';
-                const bar = document.createElement('div');
-                bar.style.position = 'fixed';
-                bar.style.bottom = '0';
-                bar.style.left = '0';
-                bar.style.right = '0';
-                bar.style.height = '60px';
-                bar.style.padding = '0 20px';
-                bar.style.backgroundColor = '#1e293b';
-                bar.style.borderTop = '2px solid #3b82f6';
-                bar.style.color = '#f8fafc';
-                bar.style.display = 'flex';
-                bar.style.justifyContent = 'space-between';
-                bar.style.alignItems = 'center';
-                bar.style.zIndex = '2147483647';
-                bar.style.fontFamily = 'sans-serif';
-                bar.style.boxShadow = '0 -4px 15px rgba(0,0,0,0.5)';
+            const signal = (type, data = "") => {
+                const url = 'http://localhost/scraper-' + type + (data ? '?json=' + encodeURIComponent(data) : '');
+                window.location.href = url;
+            };
 
-                const msg = document.createElement('div');
-                msg.innerHTML = '<span style="color:#fbbf24; font-size:1.2em; margin-right:8px;">⚠️</span> Cloudflare 보안(로봇 확인)을 통과한 후, 반드시 우측의 <b>완료</b> 버튼을 눌러주세요.';
-                msg.style.fontSize = '14px';
-
-                const btn = document.createElement('button');
-                btn.innerText = '인증 완료 (계속하기)';
-                btn.style.padding = '10px 20px';
-                btn.style.backgroundColor = '#10b981';
-                btn.style.color = 'white';
-                btn.style.border = 'none';
-                btn.style.borderRadius = '6px';
-                btn.style.cursor = 'pointer';
-                btn.style.fontWeight = 'bold';
-                btn.style.fontSize = '14px';
+            async function run() {
+                const text = document.body.innerText.trim();
+                const isProbablyJson = document.contentType === 'application/json' || text.startsWith('{') || text.startsWith('[');
                 
-                btn.onclick = () => {
-                    btn.innerText = '확인 중...';
-                    btn.style.backgroundColor = '#64748b';
-                    // Reload the page to test if Cloudflare is bypassed.
-                    // If bypassed, JSON will load successfully and be captured.
-                    window.location.reload(); 
-                };
-
-                bar.appendChild(msg);
-                bar.appendChild(btn);
-                document.body.appendChild(bar);
-
-                // 화면에 창을 보이게 하라고 Rust에 신호 전송
-                window.location.href = 'http://localhost/scraper-show';
+                if (isProbablyJson) {
+                    try {
+                        const resp = await fetch(window.location.href, { cache: 'no-store' });
+                        if (resp.ok) {
+                            const buffer = await resp.arrayBuffer();
+                            const decoded = new TextDecoder('utf-8').decode(buffer);
+                            signal('data', decoded);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('Fetch failed:', e);
+                    }
+                    // Fallback to current text if fetch fails
+                    signal('data', text);
+                } else if (text.includes('Cloudflare') || text.includes('DDoS') || text.includes('Challenge') || text.length < 50) {
+                    // Show window for Cloudflare or if page seems empty/loading
+                    // Add UI bar
+                    document.body.style.paddingBottom = '70px';
+                    const bar = document.createElement('div');
+                    bar.style.cssText = 'position:fixed; bottom:0; left:0; right:0; height:60px; padding:0 20px; background:#1e293b; border-top:2px solid #3b82f6; color:#f8fafc; display:flex; justify-content:space-between; align-items:center; z-index:2147483647; font-family:sans-serif; box-shadow:0 -4px 15px rgba(0,0,0,0.5);';
+                    bar.innerHTML = '<div><span style="color:#fbbf24; font-size:1.2em; margin-right:8px;">⚠️</span> 로봇 보안 확인(Cloudflare)을 통과한 후 <b>완료</b>를 눌러주세요.</div>';
+                    
+                    const btn = document.createElement('button');
+                    btn.innerText = '인증 완료 (계속하기)';
+                    btn.style.cssText = 'padding:10px 20px; background:#10b981; color:white; border:none; borderRadius:6px; cursor:pointer; fontWeight:bold;';
+                    btn.onclick = () => { window.location.reload(); };
+                    
+                    bar.appendChild(btn);
+                    document.body.appendChild(bar);
+                    
+                    // Signal show after a brief delay
+                    setTimeout(() => signal('show'), 300);
+                }
             }
-        });
+
+            if (document.readyState === 'complete') {
+                run();
+            } else {
+                window.addEventListener('load', run);
+                // Fail-safe
+                setTimeout(run, 3000);
+            }
+        })();
     "#;
 
     let app_clone = app.clone();
@@ -203,17 +199,18 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
         &window_label,
         WebviewUrl::External(url.parse().unwrap())
     )
-    .title(format!("데이터 로딩 및 보안 확인... ({})", provider))
+    .title(format!("데이터 로드 중... ({})", provider))
     .inner_size(900.0, 700.0)
-    .visible(false) // 백그라운드에서 조용히 실행
+    .visible(false)
     .initialization_script(init_script)
     .on_navigation(move |nav_url| {
         let url_str = nav_url.as_str();
         if url_str.starts_with("http://localhost/scraper-show") {
-            // Cloudflare에 걸렸으니 창을 보여주고 포커싱
             if let Some(w) = app_clone.get_webview_window(&window_label_show) {
                 let _ = w.show();
                 let _ = w.set_focus();
+                let _ = w.set_always_on_top(true);
+                let _ = w.set_always_on_top(false); // Quick flash to front
             }
             return false;
         } else if url_str.starts_with("http://localhost/scraper-data") {
@@ -225,8 +222,6 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
                     break;
                 }
             }
-            
-            // 창 닫기
             if let Some(w) = app_clone.get_webview_window(&window_label_clone) {
                 let _ = w.close();
             }

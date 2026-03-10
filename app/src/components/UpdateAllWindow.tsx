@@ -73,6 +73,9 @@ const UpdateAllWindow: React.FC = () => {
             const code = findArg(etfArgs, "--code") || etf.code;
 
             try {
+                // Add a small initial delay for the first item to let the environment settle
+                if (i === 0) await new Promise(r => setTimeout(r, 500));
+                
                 await invoke<string>('get_etf_holdings', {
                     provider,
                     id,
@@ -86,8 +89,8 @@ const UpdateAllWindow: React.FC = () => {
                 console.error(`Update failed for ${etf.name}:`, e);
             }
 
-            // 모든 운용사에 대해 일괄적으로 200ms 대기 (Cloudflare 인터랙션 방지 위함)
-            await new Promise(r => setTimeout(r, 200));
+            // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보
+            await new Promise(r => setTimeout(r, 800));
         }
 
         setIsUpdating(false);

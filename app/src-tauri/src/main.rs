@@ -6,14 +6,19 @@ use std::io::Write;
 use std::panic;
 
 fn main() {
-    let app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
+    let app_data = if cfg!(target_os = "windows") {
+        std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string())
+    } else {
+        // On Mac/Linux, avoid writing to the source directory which triggers tauri dev reloads
+        std::env::var("HOME").map(|h| format!("{}/Library/Logs", h)).unwrap_or_else(|_| ".".to_string())
+    };
     let log_dir = std::path::PathBuf::from(app_data).join("com.juno.activeetfs");
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("debug_startup.log");
     
     // Log app start
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-        let _ = writeln!(f, "[APP START] Executable launched!");
+        let _ = writeln!(f, "[APP START] Executable launched at {:?}", std::time::SystemTime::now());
     }
 
     panic::set_hook(Box::new(move |panic_info| {
