@@ -167,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 onClick={openUpdateAllWindow}
                                 className="menu-item"
                             >
-                                Update All (1day)
+                                Update All (per day)
                             </button>
                             <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                             <button
