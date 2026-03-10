@@ -15,7 +15,7 @@
 
 <br>
 
-<img src="img/activeetf_v0.3.1.png" width="640" alt="v0.3.1 스크린샷" />
+<img src="https://github.com/joonhochoi/activeetfs/blob/0158c29cbc7e08b2b1b1658d2cf00ca26688bf0c/img/activeetfs_v0.3.1.png" width="980" alt="v0.3.1 스크린샷" />
 
 ## ✨ 주요 기능 (Key Features)
 
