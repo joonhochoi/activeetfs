@@ -1,8 +1,9 @@
 # 📈 Active ETFs
 
-![Active ETFs](https://img.shields.io/badge/version-0.3.1-blue.svg)
-![Tauri](https://img.shields.io/badge/Tauri-Rust-orange.svg)
+![Active ETFs](https://img.shields.io/badge/version-0.3.2-blue.svg)
+![Tauri](https://img.shields.io/badge/Tauri-v2-orange.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB.svg)
+![macOS](https://img.shields.io/badge/macOS-Universal-black.svg)
 
 **Active ETFs**는 국내 다양한 자산운용사의 ETF(상장지수펀드) PDF(Portfolio Deposit File) 구성과 비중 변화를 손쉽게 수집하고, 직관적으로 시각화 및 비교 분석할 수 있는 **데스크톱 애플리케이션**입니다.
 
@@ -13,29 +14,33 @@
 이 프로젝트는 본래 웹서버에서 동작시킬 용도로 스크래퍼 로직부터 만들어두고 방치하던걸 바이브 코딩으로 해보면 좀 쉽게 되려나로 시작된 개인 작업물입니다.
 프로젝트 개발 툴은 Antigravity 이며, 거의 90%이상의 코드는 Gemini+Opus 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
 
-* Windows 용 설치 파일 : [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.1_x64-setup.exe)
-  * 최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시면 이후 업데이트는 앱 시작시 자동 체크하여 설치합니다. 
-  * 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.
+* **Windows 용 설치 파일**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.2_x64-setup.exe)
+  * 최초 설치 시 "Windows의 PC 보호" 혹은 macOS의 "확인되지 않은 개발자" 경고가 뜰 수 있습니다. 이는 개인 개발자 배포 정책에 의한 것으로 안전하오니 안내에 따라 실행해 주세요. 
+  * 이후 업데이트는 앱 시작 시 자동으로 체크하여 무중단 업데이트를 수행합니다.
+* **macOS 용 설치 파일 (Universal)**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.2_universal.dmg)
+
 
 <br>
 
-<img src="https://github.com/joonhochoi/activeetfs/blob/0158c29cbc7e08b2b1b1658d2cf00ca26688bf0c/img/activeetfs_v0.3.1.png" width="980" alt="v0.3.1 스크린샷" />
+<img src="https://github.com/joonhochoi/activeetfs/blob/main/img/activeetfs_v0.3.1.png" width="980" alt="v0.3.1 스크린샷" />
 
 ## ✨ 주요 기능 (Key Features)
 
-* **다양한 종류의 자산운용사 지원**
-* **네이티브 기반 독립 실행 환경**: Rust/Tauri 아키텍처로 짜인 네이티브 환경 위에서 독립적으로 스크래핑 및 DB 관리를 수행해 처리 속도가 매우 빠르고 리소스 낭비가 적습니다.
-* **손쉬운 일괄 업데이트 (Update All)**: 선택한 특정 날짜의 모든 ETF 포트폴리오 및 구성 종목 데이터를 버튼 클릭 한 번으로 수집(Update)할 수 있습니다.
-* **포트폴리오 과거-현재 시점 비교**:
-  * 선택된 기준 시점의 자산 구성과 특정 과거 시점의 구성을 대조 분석하여 비중의 증가/감소, 신규 편입 및 편출을 정밀하게 모니터링합니다.
-* **대시보드 차트 시각화**: Apache ECharts를 도입하여 시계열 ETF 비중 데이터를 시각적이고 직관적인 차트로 표현하며, 매끄러운 툴팁과 필터링 인터랙션을 제공합니다.
-* **관심 종목 (Favorites) & UX 연동**:
-  * 자주 보는 ETF를 별 아이콘(★)으로 지정해 상단에 배치하고 금색으로 강조 표시할 수 있습니다.
-  * 종목 테이블이나 로그 창에서 항목을 더블클릭하면 해당 ETF의 공식 웹페이지로 즉각 이동합니다.
-* **Cloudflare 403 차단 우회**: Rust 기반 네이티브 비동기 스크래퍼를 통해 Cloudflare의 봇 방어 시스템을 우회하여 데이터를 수집합니다.
-
-* **현재 지원하는 자산운용사**: KODEX, 타임폴리오, Koact, RISE, PLUS
-  * 각 운용사별 Active ETF들의 경우 Time과 Koact는 전체, 그외는 주요 ETF들을 선별해서 추가해두었습니다. 추후 직접 추가하는 기능도 고려중입니다.
+* **다양한 자산운용사 지원**: KODEX, 타임폴리오, Koact, RISE, PLUS 등 주요 운용사의 Active ETF를 지원하며 종목 리스트를 지속적으로 확장 중입니다.
+* **네이티브 기반 독립 실행 (Tauri v2)**: Rust와 Tauri v2 아키텍처를 기반으로 백엔드가 구성되어 빠른 실행 속도와 낮은 리소스 점유율을 자랑합니다.
+* **무중단 자동 업데이트**: GitHub Actions를 통한 CI/CD 파이프라인이 구축되어 있어, 새로운 버전이 출시될 때마다 앱 시작 시 자동으로 감지하고 간편하게 업데이트할 수 있습니다.
+* **강력한 데이터 스크래핑**: 
+  * **안티봇 우회**: Cloudflare 보안 챌린지를 네이티브 WebView를 활용해 우회하여 데이터를 수집합니다.
+  * **일괄 업데이트 (Update All)**: 캘린더를 통해 하루 혹은 여러 날짜의 데이터를 한 번의 클릭으로 자동 수집할 수 있습니다.
+  * **한글 인코딩 최적화**: 특정 운용사에서 발생하는 인코딩(Mojibake) 문제를 해결하여 정확한 한글 데이터를 제공합니다.
+* **포트폴리오 과거-현재 대조 분석**:
+  * 선택한 기준일과 과거 시점의 포트폴리오를 비교하여 신규 편입(NEW), 비중 증감 등을 명확하게 시각화합니다.
+* **인터랙티브 대시보드 (ECharts)**:
+  * Apache ECharts를 활용해 시계열 비중 변화를 시각화합니다. 
+  * **확대/축소(Zoom)** 기능을 지원하여 세밀한 비중 변화를 시점별로 추적할 수 있습니다.
+* **사용자 편의성 (UX)**:
+  * **관심 종목 (Favorites)**: 자주 보는 ETF를 별 아이콘(★)으로 즐겨찾기하고 상단에 고정할 수 있습니다.
+  * **상세 페이지 연동**: 종목명을 더블클릭하면 해당 상품의 공식 웹사이트로 바로 연결됩니다.
 <br>
 
 ## 🛠 기술 스택 (Tech Stack)
@@ -46,7 +51,7 @@
 * **Charts**: Apache ECharts
 
 ### Backend & Data Pipeline
-* **Framework**: Rust (Tauri)
+* **Framework**: Rust (**Tauri v2**)
 * **Database**: SQLite (로컬 DB 인하우스 저장)
 * **Data Scraper**: Rust 기반 네이티브 비동기 스크래퍼 통합 (Legacy Go Sidecar 의존 중단)
 
@@ -73,13 +78,18 @@ npm run tauri dev
 ```
 
 ### 3) 릴리스 빌드 (Production Build)
-프로젝트 루트 디렉토리 안에 구성된 통합 스크립트를 활용해 프로덕션 버전을 렌더링하고 패키징합니다.
-* **Windows 배포용 빌드 스크립트 실행 (PowerShell)**:
+프로젝트 루트 디렉토리 내 `scripts` 폴더의 자동화 스크립트를 활용하거나 Tauri CLI를 사용합니다.
+
+* **Windows (PowerShell)**:
   ```powershell
-  cd ../scripts
+  cd scripts
   .\build_release.ps1
   ```
-  *(수동 빌드 시 `app` 폴더 내에서 `npm run tauri build`를 직접 실행할 수 있습니다.)*
+* **macOS (Terminal)**:
+  ```bash
+  cd app
+  npm run tauri build -- --target universal-apple-darwin
+  ```
 
 <br>
 
@@ -87,11 +97,11 @@ npm run tauri dev
 
 ```text
 .
-├── app/                  # React 프론트엔드 최상위 디렉토리 및 UI 로직 (Vite)
-│   ├── src/              # React 컴포넌트, 상태 관리 로직
-│   └── src-tauri/        # Rust 백엔드 핵심 비즈니스 로직 및 Native Command API
-├── scripts/              # 배포 및 빌드 관리 자동화 스크립트
-├── sidecars/             # (Deprecated) 기존 Go 기반 스크래핑 사이드카 엔진 소스, Rust로 통합됨
+├── app/                  # Tauri v2 기반 애플리케이션 (React + Rust)
+│   ├── src/              # 프론트엔드 UI (React, TypeScript)
+│   └── src-tauri/        # 백엔드 핵심 비즈니스 로직 (Rust)
+├── scripts/              # 배포 및 빌드 자동화 스크립트
+├── img/                  # 스크린샷 등 미디어 자산
 └── README.md
 ```
 

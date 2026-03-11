@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "version-sync": "node ../scripts/update-version.js",
     "build:release": "node ../scripts/build.js"
   },
   "dependencies": {
