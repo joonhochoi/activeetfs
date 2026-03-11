@@ -109,6 +109,14 @@ jobs:
           $version = (Get-Content "app/src-tauri/tauri.conf.json" | ConvertFrom-Json).version
           $assetsDir = "release-assets"
           
+          # Flatten directory structure: find all files in subfolders and move them to the root of $assetsDir
+          Get-ChildItem -Path $assetsDir -File -Recurse | ForEach-Object {
+            $dest = Join-Path $assetsDir $_.Name
+            if ($_.FullName -ne $dest) {
+              Move-Item -Path $_.FullName -Destination $dest -Force
+            }
+          }
+          
           $platforms = @{}
           
           # Windows x86_64
@@ -154,7 +162,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: 'Active ETFs ${{ github.ref_name }}'
-          body: '최초 설치시 설치 마법사를 통해 앱을 원하는 위치에 설치하시고, 이후 업데이트는 앱 시작시 자동 체크하여 업데이트 가능합니다.<p>⚠️ 최초 설치 시 "Windows의 PC 보호" 파란색 경고창이 뜰 수 있습니다. 이는 개인 개발자 보호 정책에 의한 것으로 안전합니다. [추가 정보] 를 누르신 후 [실행] 버튼을 눌러 설치를 진행해 주세요.'
+          body: '본문을 써야할 자리'
           draft: true
           prerelease: false
           files: |
