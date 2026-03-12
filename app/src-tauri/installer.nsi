@@ -144,7 +144,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
 !define MUI_WELCOMEPAGE_TITLE "Active ETFs 설치를 시작합니다"
-!define MUI_WELCOMEPAGE_TEXT "이 프로그램은 국내 다양한 자산운용사의 액티브 ETF 데이터를 수집하고 분석하기 도구입니다.\r\n\r\n어디까지나 개인이 쓰려고 만든 프로그램인지라 부족한 부분이 많습니다. \r\n\r\n 다음 과정에서 설치할 폴더를 잘 선택해주시고 설치 후 그 폴더에 있는 activeetfs.exe로 실행해주세요."
+!define MUI_WELCOMEPAGE_TEXT "이 프로그램은 국내 다양한 자산운용사의 액티브 ETF 데이터를 수집하고 분석하기 도구입니다.$\r$\n$\r$\n어디까지나 개인이 쓰려고 만든 프로그램인지라 부족한 부분이 많습니다. $\r$\n$\r$\n다음 과정에서 설치할 폴더를 잘 선택해주시고 설치 후 그 폴더에 있는 activeetfs.exe로 실행해주세요."
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_WELCOME
 
