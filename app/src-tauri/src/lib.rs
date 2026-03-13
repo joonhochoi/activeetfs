@@ -39,6 +39,8 @@ pub fn run(context: tauri::Context) {
             commands::analyze_trends,
             commands::get_favorite_etfs,
             commands::toggle_etf_favorite,
+            commands::get_changelog,
+            commands::check_and_update_version,
             fetch::get_etf_holdings
         ])
         .run(context)

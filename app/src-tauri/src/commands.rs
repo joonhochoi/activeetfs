@@ -199,3 +199,35 @@ pub async fn toggle_etf_favorite(
 }
 
 
+#[tauri::command]
+pub fn get_changelog() -> String {
+    include_str!("../../../CHANGELOG.md").to_string()
+}
+
+#[tauri::command]
+pub async fn check_and_update_version(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    use sqlx::Row;
+    
+    // 1. Get current version from Cargo.toml (compile time)
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    // 2. Read last_version from DB
+    let rec = sqlx::query("SELECT value FROM metadata WHERE key = 'last_version'")
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    let last_version: Option<String> = rec.and_then(|r| r.get::<Option<String>, _>("value"));
+    
+    // 3. Compare and update
+    if last_version.as_deref() != Some(current_version) {
+        sqlx::query("INSERT INTO metadata (key, value) VALUES ('last_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+            .bind(current_version)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(true) // Version changed or new
+    } else {
+        Ok(false) // Version identical
+    }
+}
