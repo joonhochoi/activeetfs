@@ -255,6 +255,8 @@ pub async fn get_holdings_by_date(
     .map_err(|e| e.to_string())?;
 
     Ok(rows)
+}
+
 #[tauri::command]
 pub fn get_changelog() -> String {
     include_str!("../../../CHANGELOG.md").to_string()
