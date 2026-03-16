@@ -198,4 +198,61 @@ pub async fn toggle_etf_favorite(
     Ok(new_val)
 }
 
+#[tauri::command]
+pub async fn check_holdings_exist(
+    state: tauri::State<'_, AppState>,
+    etf_code: String,
+    date: String,
+) -> Result<bool, String> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM holdings WHERE etf_code = ? AND date = ?"
+    )
+    .bind(&etf_code)
+    .bind(&date)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
 
+    Ok(row.0 > 0)
+}
+
+#[tauri::command]
+pub async fn get_latest_date_before(
+    state: tauri::State<'_, AppState>,
+    etf_code: String,
+    before_date: String,
+) -> Result<Option<String>, String> {
+    use sqlx::Row;
+    let row = sqlx::query(
+        "SELECT date FROM holdings WHERE etf_code = ? AND date < ? ORDER BY date DESC LIMIT 1"
+    )
+    .bind(&etf_code)
+    .bind(&before_date)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(row.map(|r| r.get::<String, _>("date")))
+}
+
+#[tauri::command]
+pub async fn get_holdings_by_date(
+    state: tauri::State<'_, AppState>,
+    etf_code: String,
+    date: String,
+) -> Result<Vec<Holding>, String> {
+    let rows = sqlx::query_as::<_, Holding>(
+        r#"
+        SELECT date, etf_code, stock_code, stock_name as "name", weight, quantity, price
+        FROM holdings
+        WHERE etf_code = ? AND date = ?
+        "#
+    )
+    .bind(etf_code)
+    .bind(date)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}

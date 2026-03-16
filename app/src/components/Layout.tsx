@@ -61,6 +61,28 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
         });
     }
 
+    const openUpdateTodayWindow = async () => {
+        setIsMenuOpen(false);
+        const webview = new WebviewWindow('update-today', {
+            url: '/index.html#update-today',
+            title: 'Update Today',
+            width: 1050,
+            height: 700,
+            resizable: true,
+            visible: true,
+            center: true,
+            alwaysOnTop: true
+        });
+
+        webview.once('tauri://created', function () {
+            // webview window successfully created
+        });
+
+        webview.once('tauri://error', function (e) {
+            console.error('Failed to open update-today window', e);
+        });
+    }
+
     return (
         <div style={{ display: 'flex', height: '100vh', width: '100vw', position: 'relative' }}>
             {/* Left Sidebar Toggle Button - Floating */}
@@ -167,7 +189,13 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 onClick={openUpdateAllWindow}
                                 className="menu-item"
                             >
-                                Update All (per day)
+                                UpdateAll Days
+                            </button>
+                            <button
+                                onClick={openUpdateTodayWindow}
+                                className="menu-item"
+                            >
+                                UpdateAll Today
                             </button>
                             <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                             <button

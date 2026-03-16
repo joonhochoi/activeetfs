@@ -39,7 +39,10 @@ pub fn run(context: tauri::Context) {
             commands::analyze_trends,
             commands::get_favorite_etfs,
             commands::toggle_etf_favorite,
-            fetch::get_etf_holdings
+            fetch::get_etf_holdings,
+            commands::check_holdings_exist,
+            commands::get_latest_date_before,
+            commands::get_holdings_by_date
         ])
         .run(context)
         .expect("error while running tauri application");
