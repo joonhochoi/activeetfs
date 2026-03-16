@@ -206,15 +206,20 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                             >
                                 Changelog
                             </button>
-                            <button
-                                disabled
-                                className="menu-item"
-                            >
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                            <div style={{
+                                padding: '4px 8px 2px',
+                                fontSize: '0.7rem',
+                                color: 'rgba(255,255,255,0.35)',
+                                letterSpacing: '0.05em',
+                                userSelect: 'none',
+                            }}>
                                 Settings
-                            </button>
+                            </div>
                             <button
                                 onClick={openSelectEtfsWindow}
                                 className="menu-item"
+                                style={{ paddingLeft: '16px' }}
                             >
                                 Select ETFs
                             </button>
