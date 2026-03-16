@@ -12,6 +12,7 @@ function App() {
     const [selectedEtf, setSelectedEtf] = useState<string>('');
     const [rightPanelContent, setRightPanelContent] = useState<React.ReactNode>(null);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
+    const [isChangelogOpen, setIsChangelogOpen] = useState(false);
 
     useEffect(() => {
         // Fetch favorites on init
@@ -38,6 +39,15 @@ function App() {
             }
         };
         checkForUpdates();
+
+        // Check for version change (automatic changelog)
+        invoke<boolean>('check_and_update_version')
+            .then(isUpdated => {
+                if (isUpdated) {
+                    setIsChangelogOpen(true);
+                }
+            })
+            .catch(console.error);
     }, []);
 
     const toggleFavorite = async (etfCode: string) => {
@@ -78,6 +88,8 @@ function App() {
             onSelectEtf={setSelectedEtf}
             rightPanel={rightPanelContent}
             favorites={favorites}
+            isChangelogOpen={isChangelogOpen}
+            setIsChangelogOpen={setIsChangelogOpen}
         >
             <Dashboard
                 etfCode={selectedEtf}

@@ -76,12 +76,6 @@ pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error:
     .execute(&pool)
     .await?;
 
-    let version = env!("CARGO_PKG_VERSION");
-    sqlx::query("INSERT INTO metadata (key, value) VALUES ('last_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
-        .bind(version)
-        .execute(&pool)
-        .await?;
-
     // Migration: Attempt to add price column if it doesn't exist (e.g. if table was created before)
     // There is no IF NOT EXISTS for ADD COLUMN in SQLite, so we catch the error.
     let _ = sqlx::query("ALTER TABLE holdings ADD COLUMN price REAL DEFAULT 0.0").execute(&pool).await;

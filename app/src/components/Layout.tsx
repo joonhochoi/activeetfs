@@ -1,5 +1,6 @@
 import React from 'react';
 import Sidebar from './Sidebar';
+import ChangelogModal from './ChangelogModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import pkg from '../../package.json';
@@ -11,9 +12,11 @@ interface LayoutProps {
     rightPanel?: React.ReactNode;
     favorites?: Set<string>;
     onSelectEtf: (etfCode: string) => void;
+    isChangelogOpen: boolean;
+    setIsChangelogOpen: (open: boolean) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favorites }) => {
+const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favorites, isChangelogOpen, setIsChangelogOpen }) => {
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(true);
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -180,11 +183,21 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 Help
                             </button>
                             <button
+                                onClick={() => {
+                                    setIsMenuOpen(false);
+                                    setIsChangelogOpen(true);
+                                }}
+                                className="menu-item"
+                            >
+                                Changelog
+                            </button>
+                            <button
                                 disabled
                                 className="menu-item"
                             >
                                 Settings
                             </button>
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                             <button
                                 onClick={openUpdateAllWindow}
                                 className="menu-item"
@@ -276,6 +289,10 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                     </div>
                 </aside>
             )}
+            <ChangelogModal
+                isOpen={isChangelogOpen}
+                onClose={() => setIsChangelogOpen(false)}
+            />
         </div>
     );
 };

@@ -43,6 +43,9 @@ pub fn run(context: tauri::Context) {
             commands::check_holdings_exist,
             commands::get_latest_date_before,
             commands::get_holdings_by_date
+            commands::get_changelog,
+            commands::check_and_update_version,
+            fetch::get_etf_holdings
         ])
         .run(context)
         .expect("error while running tauri application");
