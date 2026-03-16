@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import activeEtfInfos from '../data/activeetfinfos.json';
 
 interface SidebarProps {
@@ -7,8 +8,21 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
-    // Default to expanding the first manager
     const [expandedManagers, setExpandedManagers] = React.useState<Set<string>>(new Set());
+    const [enabledCodes, setEnabledCodes] = useState<Set<string> | null>(null);
+
+    const fetchEnabledCodes = () => {
+        invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
+            .then(list => setEnabledCodes(new Set(list.filter(e => e.isEnabled).map(e => e.code))))
+            .catch(() => setEnabledCodes(null));
+    };
+
+    useEffect(() => {
+        fetchEnabledCodes();
+        const channel = new BroadcastChannel('etf-settings');
+        channel.onmessage = () => fetchEnabledCodes();
+        return () => channel.close();
+    }, []);
 
     const toggleManager = (managerId: string) => {
         setExpandedManagers(prev => {
@@ -25,6 +39,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
     return (
         <div style={{ padding: '10px' }}>
             {activeEtfInfos.managers.map((manager) => {
+                const visibleEtfs = (manager.etfs as any[]).filter(etf =>
+                    enabledCodes === null || enabledCodes.has(etf.code)
+                );
+                if (visibleEtfs.length === 0) return null;
+
                 const isExpanded = expandedManagers.has(manager.id);
                 return (
                     <div key={manager.id} style={{ marginBottom: '10px' }}>
@@ -53,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
 
                         {isExpanded && (
                             <ul style={{ listStyle: 'none', padding: 0, margin: '5px 0 10px 0' }}>
-                                {manager.etfs.map((etf) => {
+                                {visibleEtfs.map((etf: any) => {
                                     const isFav = favorites?.has(etf.code);
                                     return (
                                         <li key={etf.code}>

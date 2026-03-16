@@ -64,6 +64,21 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
         });
     }
 
+    const openSelectEtfsWindow = async () => {
+        setIsMenuOpen(false);
+        const webview = new WebviewWindow('select-etfs', {
+            url: '/index.html#select-etfs',
+            title: 'Select ETFs',
+            width: 680,
+            height: 750,
+            resizable: true,
+            visible: true,
+            center: true,
+            alwaysOnTop: true
+        });
+        webview.once('tauri://error', (e) => console.error('Failed to open select-etfs window', e));
+    }
+
     const openUpdateTodayWindow = async () => {
         setIsMenuOpen(false);
         const webview = new WebviewWindow('update-today', {
@@ -196,6 +211,12 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 className="menu-item"
                             >
                                 Settings
+                            </button>
+                            <button
+                                onClick={openSelectEtfsWindow}
+                                className="menu-item"
+                            >
+                                Select ETFs
                             </button>
                             <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                             <button

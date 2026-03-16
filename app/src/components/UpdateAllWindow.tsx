@@ -61,9 +61,13 @@ const UpdateAllWindow: React.FC = () => {
         setLogs([]);
         setIsComplete(false);
 
+        const enabledList = await invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list').catch(() => null);
+        const enabledCodes = enabledList ? new Set(enabledList.filter(e => e.isEnabled).map(e => e.code)) : null;
+
         const allEtfs: { manager: any, etf: any }[] = [];
         activeEtfInfos.managers.forEach(manager => {
             manager.etfs.forEach(etf => {
+                if (enabledCodes && !enabledCodes.has(etf.code)) return;
                 allEtfs.push({ manager, etf });
             });
         });

@@ -83,6 +83,10 @@ pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error:
     // Migration: Add is_favorite column
     let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN is_favorite BOOLEAN DEFAULT 0").execute(&pool).await;
 
+    // Migration: Add is_enabled column (default 1 = enabled)
+    let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN is_enabled BOOLEAN DEFAULT 1").execute(&pool).await;
+    let _ = sqlx::query("UPDATE etfs SET is_enabled = 1 WHERE is_enabled IS NULL").execute(&pool).await;
+
     seed_db(&pool).await?;
 
     Ok(pool)

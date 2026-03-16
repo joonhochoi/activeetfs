@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import UpdateAllWindow from './components/UpdateAllWindow';
 import UpdateTodayWindow from './components/UpdateTodayWindow';
+import SelectEtfsWindow from './components/SelectEtfsWindow';
 import { invoke } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -81,6 +82,10 @@ function App() {
 
     if (hash === '#update-today') {
         return <UpdateTodayWindow />;
+    }
+
+    if (hash === '#select-etfs') {
+        return <SelectEtfsWindow />;
     }
 
     return (

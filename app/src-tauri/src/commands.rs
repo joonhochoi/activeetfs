@@ -1,6 +1,6 @@
 use crate::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -255,6 +255,63 @@ pub async fn get_holdings_by_date(
     .map_err(|e| e.to_string())?;
 
     Ok(rows)
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct EtfSetting {
+    pub code: String,
+    pub is_enabled: bool,
+    pub data_count: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EtfToggle {
+    pub code: String,
+    pub is_enabled: bool,
+}
+
+#[tauri::command]
+pub async fn get_etf_enabled_list(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<EtfSetting>, String> {
+    let rows = sqlx::query_as::<_, EtfSetting>(
+        r#"
+        SELECT e.code,
+               COALESCE(e.is_enabled, 1) as is_enabled,
+               COALESCE(h.cnt, 0) as data_count
+        FROM etfs e
+        LEFT JOIN (
+            SELECT etf_code, COUNT(DISTINCT date) as cnt
+            FROM holdings
+            GROUP BY etf_code
+        ) h ON h.etf_code = e.code
+        "#,
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
+#[tauri::command]
+pub async fn save_etf_enabled_list(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    settings: Vec<EtfToggle>,
+) -> Result<(), String> {
+    for s in &settings {
+        sqlx::query("UPDATE etfs SET is_enabled = ? WHERE code = ?")
+            .bind(s.is_enabled)
+            .bind(&s.code)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    app.emit("etf-settings-saved", "").map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

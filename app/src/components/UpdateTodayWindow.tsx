@@ -128,41 +128,50 @@ const UpdateTodayWindow: React.FC = () => {
             setShowTimeWarning(true);
         }
 
-        const allRows: EtfRow[] = [];
-        activeEtfInfos.managers.forEach((manager: any) => {
-            (manager.etfs as any[]).forEach((etf: any) => {
-                allRows.push({
-                    etfCode: etf.code,
-                    etfName: etf.name,
-                    managerName: manager.name,
-                    manager,
-                    etf,
-                    status: 'waiting',
-                    compareDate: null,
-                    inStocks: [],
-                    outStocks: [],
+        invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
+            .catch(() => null)
+            .then(enabledList => {
+                const enabledCodes = enabledList
+                    ? new Set(enabledList.filter(e => e.isEnabled).map(e => e.code))
+                    : null;
+
+                const allRows: EtfRow[] = [];
+                activeEtfInfos.managers.forEach((manager: any) => {
+                    (manager.etfs as any[]).forEach((etf: any) => {
+                        if (enabledCodes && !enabledCodes.has(etf.code)) return;
+                        allRows.push({
+                            etfCode: etf.code,
+                            etfName: etf.name,
+                            managerName: manager.name,
+                            manager,
+                            etf,
+                            status: 'waiting',
+                            compareDate: null,
+                            inStocks: [],
+                            outStocks: [],
+                        });
+                    });
+                });
+                setRows(allRows);
+
+                // 비교 날짜 + 오늘 데이터 존재 여부 병렬 로딩
+                allRows.forEach((row, idx) => {
+                    Promise.all([
+                        invoke<string | null>('get_latest_date_before', { etfCode: row.etfCode, beforeDate: today }),
+                        invoke<boolean>('check_holdings_exist', { etfCode: row.etfCode, date: today }),
+                    ]).then(([date, exists]) => {
+                        setRows(prev => {
+                            const next = [...prev];
+                            if (next[idx]) next[idx] = {
+                                ...next[idx],
+                                compareDate: date,
+                                status: exists ? 'has_data' : 'waiting',
+                            };
+                            return next;
+                        });
+                    }).catch(() => { });
                 });
             });
-        });
-        setRows(allRows);
-
-        // 비교 날짜 + 오늘 데이터 존재 여부 병렬 로딩
-        allRows.forEach((row, idx) => {
-            Promise.all([
-                invoke<string | null>('get_latest_date_before', { etfCode: row.etfCode, beforeDate: today }),
-                invoke<boolean>('check_holdings_exist', { etfCode: row.etfCode, date: today }),
-            ]).then(([date, exists]) => {
-                setRows(prev => {
-                    const next = [...prev];
-                    if (next[idx]) next[idx] = {
-                        ...next[idx],
-                        compareDate: date,
-                        status: exists ? 'has_data' : 'waiting',
-                    };
-                    return next;
-                });
-            }).catch(() => { });
-        });
     }, []);
 
     const handleUpdateToday = async () => {
