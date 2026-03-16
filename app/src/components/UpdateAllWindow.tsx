@@ -87,17 +87,9 @@ const UpdateAllWindow: React.FC = () => {
                     totalDates
                 });
 
-                const commonArgs = (manager as any).common_args || [];
-                const etfArgs = etf.args || [];
-
-                const findArg = (args: string[], flag: string) => {
-                    const idx = args.indexOf(flag);
-                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
-                };
-
-                const provider = findArg(commonArgs, "--type") || manager.id;
-                const id = findArg(etfArgs, "--id");
-                const code = findArg(etfArgs, "--code") || etf.code;
+                const provider = manager.type || manager.id;
+                const id = etf.id;
+                const code = etf.code;
 
                 try {
                     // Add a small initial delay for the first item to let the environment settle

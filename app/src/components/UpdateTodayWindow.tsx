@@ -41,11 +41,6 @@ const toLocalDateString = (date: Date): string => {
     return `${year}-${month}-${day}`;
 };
 
-const findArg = (args: string[], flag: string): string => {
-    const idx = args.indexOf(flag);
-    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : '';
-};
-
 const STATUS_CONFIG: Record<EtfStatus, { label: string; color: string; bg: string }> = {
     waiting: { label: '대기', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
     has_data: { label: '데이터있음', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
@@ -136,10 +131,8 @@ const UpdateTodayWindow: React.FC = () => {
         const allRows: EtfRow[] = [];
         activeEtfInfos.managers.forEach((manager: any) => {
             (manager.etfs as any[]).forEach((etf: any) => {
-                const etfArgs: string[] = etf.args || [];
-                const resolvedCode = findArg(etfArgs, '--code') || etf.code;
                 allRows.push({
-                    etfCode: resolvedCode,
+                    etfCode: etf.code,
                     etfName: etf.name,
                     managerName: manager.name,
                     manager,
@@ -200,10 +193,8 @@ const UpdateTodayWindow: React.FC = () => {
                 return next;
             });
 
-            const commonArgs: string[] = (row.manager as any).common_args || [];
-            const etfArgs: string[] = (row.etf as any).args || [];
-            const provider = findArg(commonArgs, '--type') || row.manager.id;
-            const id = findArg(etfArgs, '--id');
+            const provider = row.manager.type || row.manager.id;
+            const id = row.etf.id;
             const code = row.etfCode;
 
             try {

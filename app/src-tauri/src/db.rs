@@ -97,7 +97,8 @@ struct Config {
 struct ManagerConfig {
     id: String,
     name: String,
-    code: String,
+    #[serde(default)]
+    code: Option<String>,
     etfs: Vec<EtfConfig>,
 }
 
@@ -115,10 +116,11 @@ async fn seed_db(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     for manager in config.managers {
         // Managers usually don't have user mutable state, but let's use ON CONFLICT for consistency or keep REPLACE if simplest
         // REPLACE is fine for managers as they only have id, name, code from config
+        let code = manager.code.as_deref().unwrap_or(&manager.id);
         sqlx::query("INSERT OR REPLACE INTO managers (id, name, code) VALUES (?, ?, ?)")
             .bind(&manager.id)
             .bind(&manager.name)
-            .bind(&manager.code)
+            .bind(code)
             .execute(pool)
             .await?;
 

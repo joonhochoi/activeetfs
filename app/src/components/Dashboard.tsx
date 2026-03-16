@@ -345,19 +345,9 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             addLog(`Starting update for ${dateStr}...`, 'info');
 
             try {
-                // Extract arguments for the new Rust command
-                const commonArgs = (manager as any).common_args || [];
-                const etfArgs = etf.args || [];
-
-                // Helper to find value after a flag
-                const findArg = (args: string[], flag: string) => {
-                    const idx = args.indexOf(flag);
-                    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : "";
-                };
-
-                const provider = findArg(commonArgs, "--type") || manager.id;
-                const id = findArg(etfArgs, "--id");
-                const code = findArg(etfArgs, "--code") || etf.code;
+                const provider = (manager as any).type || manager.id;
+                const id = (etf as any).id;
+                const code = etf.code;
 
                 const output = await invoke<string>('get_etf_holdings', {
                     provider,
@@ -383,20 +373,10 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         loadHoldings(); // Refresh
     };
 
-    const getEtfId = (args: string[]) => {
-        const idIndex = args.indexOf('--id');
-        if (idIndex !== -1 && idIndex + 1 < args.length) {
-            return args[idIndex + 1];
-        }
-        return '';
-    };
-
     const handleHeaderDoubleClick = async () => {
         if (!manager || !manager.view_url || !etf) return;
 
-        const commonArgs = (manager as any).common_args || [];
-        const fullArgs = [...commonArgs, ...etf.args];
-        const idVal = getEtfId(fullArgs);
+        const idVal = (etf as any).id;
 
         if (!idVal) {
             addLog("Could not find ETF ID for URL", "error");
