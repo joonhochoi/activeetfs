@@ -22,9 +22,7 @@
 
 <br>
 
-<img src="https://github.com/joonhochoi/activeetfs/blob/main/img/activeetfs_v0.3.1.png" width="980" alt="v0.3.1 스크린샷" /><br>
-<img src="https://github.com/joonhochoi/activeetfs/blob/main/img/updateall.png" width="450" alt="Update All" /> | 
-<img src="https://github.com/joonhochoi/activeetfs/blob/main/img/updatetoday.png" width="450" alt="Update Today" /><br>
+<img src="https://github.com/joonhochoi/activeetfs/blob/main/img/activeetfs_v0.3.1.png" width="320" alt="v0.3.1 스크린샷" /><img src="https://github.com/joonhochoi/activeetfs/blob/main/img/updateall.png" width="240" alt="Update All" /><img src="https://github.com/joonhochoi/activeetfs/blob/main/img/updatetoday.png" width="260" alt="Update Today" /><br>
 
 ## ✨ 주요 기능 (Key Features)
 
