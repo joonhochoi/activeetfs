@@ -84,6 +84,7 @@ pub async fn get_etf_holdings(
         "rise" => fetch_rise(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "plus" => fetch_plus(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "time" => fetch_time(&id, &code, &date).await.map_err(|e| e.to_string())?,
+        "tiger" => fetch_tiger(&id, &code, &date).await.map_err(|e| e.to_string())?,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
@@ -431,6 +432,134 @@ async fn fetch_plus(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
             // 여기서는 tokio sleep을 사용하는 것이 좋습니다.
              tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    Ok(holdings)
+}
+
+// TIGER 데이터 가져오기 (HTML 스크래핑, POST 요청, 페이지네이션)
+// Fetch TIGER (Mirae Asset) data using HTML scraping via POST with pagination
+async fn fetch_tiger(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box<dyn std::error::Error>> {
+    // 날짜 형식 변환: YYYY-MM-DD -> YYYY.MM.DD
+    let fix_date = date.replace("-", ".");
+
+    let url = "https://investments.miraeasset.com/tigeretf/ko/product/search/detail/pdfListAjax.ajax";
+    let referer = format!(
+        "https://investments.miraeasset.com/tigeretf/ko/product/search/detail/index.do?ksdFund={}",
+        id
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .build()?;
+
+    let mut holdings = Vec::new();
+    let mut page_index = 1i32;
+    let list_cnt = 10i32;
+    let mut total_pages = 1i32;
+
+    let tr_selector = Selector::parse("tr").unwrap();
+    let td_selector = Selector::parse("td").unwrap();
+
+    loop {
+        let mut headers = header::HeaderMap::new();
+        headers.insert("Referer", referer.parse().unwrap());
+        headers.insert("Origin", "https://investments.miraeasset.com".parse().unwrap());
+        headers.insert(header::CONTENT_TYPE, "application/x-www-form-urlencoded; charset=UTF-8".parse().unwrap());
+        headers.insert("X-Requested-With", "XMLHttpRequest".parse().unwrap());
+        headers.insert("Accept", "text/html, */*; q=0.01".parse().unwrap());
+        headers.insert("Accept-Language", "ko,en-US;q=0.9,en;q=0.8".parse().unwrap());
+
+        let body = if page_index == 1 {
+            format!(
+                "ksdFund={}&pageIndex={}&firstIndex=0&listCnt={}&fixDate={}&prfPrd=Week01&order=SRD",
+                id, page_index, list_cnt, fix_date
+            )
+        } else {
+            format!(
+                "ksdFund={}&pageIndex={}&listCnt={}&fixDate={}&prfPrd=Week01&order=SRD",
+                id, page_index, list_cnt, fix_date
+            )
+        };
+
+
+        let resp = client
+            .post(url)
+            .headers(headers)
+            .body(body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("Bad status: {} (page {})", status, page_index).into());
+        }
+
+        let html_text = resp.text().await?;
+
+        // Html은 Send가 아니므로 await 전에 블록 내에서 파싱 후 드롭
+        let page_holdings: Vec<Holding> = {
+            let wrapped = format!("<table>{}</table>", html_text);
+            let document = Html::parse_document(&wrapped);
+
+            // 첫 페이지: data-tot-cnt 속성이 있는 첫 번째 tr에서 총 종목 수 파악
+            if page_index == 1 {
+                if let Some(tr) = document.select(&tr_selector).find(|tr| tr.value().attr("data-tot-cnt").is_some()) {
+                    let total_count = tr.value().attr("data-tot-cnt")
+                        .and_then(|s| s.trim().parse::<i64>().ok())
+                        .unwrap_or(0);
+                    total_pages = ((total_count + list_cnt as i64 - 1) / list_cnt as i64).max(1) as i32;
+                }
+            }
+
+            let mut page_result = Vec::new();
+            for tr in document.select(&tr_selector) {
+                // data-tot-cnt 속성이 있는 행만 실제 데이터 행으로 처리
+                if tr.value().attr("data-tot-cnt").is_none() {
+                    continue;
+                }
+                let cells: Vec<_> = tr.select(&td_selector).collect();
+                if cells.len() < 5 {
+                    continue;
+                }
+
+                // td[0]: 종목코드, td[1]: 종목명, td[2]: 수량, td[3]: 평가금액, td[4]: 비중
+                let stock_code = cells[0].text().collect::<Vec<_>>().join("").trim().to_string();
+                let name = cells[1].text().collect::<Vec<_>>().join("").trim().to_string();
+                let qty_str = cells[2].text().collect::<Vec<_>>().join("").replace(",", "");
+                let price_str = cells[3].text().collect::<Vec<_>>().join("").replace(",", "");
+                let weight_str = cells[4].text().collect::<Vec<_>>().join("").replace(",", "");
+
+                if stock_code.is_empty() || name.is_empty() {
+                    continue;
+                }
+
+                let quantity = qty_str.trim().parse::<i64>().unwrap_or(0);
+                let price = price_str.trim().parse::<f64>().unwrap_or(0.0);
+                let weight = weight_str.trim().parse::<f64>().unwrap_or(0.0);
+
+                page_result.push(Holding {
+                    date: date.to_string(),
+                    etf_code: code.to_string(),
+                    stock_code,
+                    name,
+                    weight,
+                    quantity,
+                    price,
+                });
+            }
+            page_result
+        }; // document가 여기서 드롭됨
+
+        holdings.extend(page_holdings);
+
+        if page_index >= total_pages {
+            break;
+        }
+
+        page_index += 1;
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
     Ok(holdings)

@@ -12,6 +12,21 @@
 
 ## 📅 날짜별 주요 변경 히스토리
 
+### 🚀 [2026-03-16] ETF 선택/관리 기능 및 오늘 데이터 일괄 업데이트
+- **ETF 활성화/비활성화 관리 (Select ETFs)**:
+  - 운용사별 ETF를 토글 방식으로 활성/비활성화할 수 있는 **Select ETFs 창**을 신규 추가했습니다.
+  - DB에 `is_enabled` 컬럼 마이그레이션을 적용하고, Rust 커맨드(`get_etf_enabled_list`, `save_etf_enabled_list`)를 추가했습니다.
+  - 설정 저장 시 `BroadcastChannel`로 메인 창 사이드바를 즉시 갱신하며, 사이드바는 비활성 ETF를 자동으로 필터링합니다.
+  - `UpdateAllWindow`, `UpdateTodayWindow`에서도 활성화된 ETF만 처리하도록 연동했습니다.
+- **Update All Today (오늘 일괄 업데이트)**:
+  - 오늘 날짜의 ETF 데이터를 한 번에 수집하는 **UpdateAll Today** 기능을 메뉴에 추가했습니다.
+  - 창이 열릴 때 데이터 존재 여부와 비교 기준 날짜를 자동으로 조회하고, 기존 데이터 덮어쓰기 옵션 및 편입/편출 종목 표시 기능을 제공합니다.
+  - 오전 8시 이전 실행 시 안내 팝업을 출력합니다.
+  - Rust 커맨드 3종 추가: `check_holdings_exist`, `get_latest_date_before`, `get_holdings_by_date`.
+- **데이터 구조 단순화 (Refactor)**:
+  - `activeetfinfos.json`에서 각 ETF의 `args` 배열과 `manager`의 `common_args`, `code` 등 미사용 필드를 제거하고, `id` 필드로 직접 접근하도록 구조를 단순화했습니다.
+  - 프론트엔드 컴포넌트(`Dashboard`, `UpdateAllWindow`, `UpdateTodayWindow`)의 `findArg` 헬퍼 함수를 제거했습니다.
+
 ### ✨ [2026-03-14] 변경 이력(Changelog) 기능 및 KODEX 종목 확장
 - **앱 내 변경 이력 확인 시스템**:
   - 프로젝트 루트의 `CHANGELOG.md` 파일을 앱 내에서 바로 확인할 수 있는 **Changelog 메뉴**를 추가했습니다.
