@@ -143,7 +143,7 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
 
             // Retry counter via sessionStorage to prevent infinite reload loops
             const RETRY_KEY = '__CF_RETRY_COUNT__';
-            const MAX_RETRIES = 3;
+            const MAX_RETRIES = 5;
             const getRetryCount = () => parseInt(sessionStorage.getItem(RETRY_KEY) || '0', 10);
             const incrementRetry = () => sessionStorage.setItem(RETRY_KEY, String(getRetryCount() + 1));
             const clearRetries = () => sessionStorage.removeItem(RETRY_KEY);
@@ -151,7 +151,7 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
             async function run() {
                 const text = document.body.innerText.trim();
                 const isProbablyJson = document.contentType === 'application/json' || text.startsWith('{') || text.startsWith('[');
-                
+
                 if (isProbablyJson) {
                     clearRetries(); // Success path - reset counter
                     try {
@@ -178,7 +178,7 @@ async fn fetch_koact(app: &tauri::AppHandle, provider: &str, id: &str, code: &st
                         // Auto-reload after a short delay to let Cloudflare session settle
                         console.log('[Scraper] CF passed but stuck, auto-reloading... (attempt ' + (retries + 1) + '/' + MAX_RETRIES + ')');
                         incrementRetry();
-                        setTimeout(() => { window.location.reload(); }, 5000);
+                        setTimeout(() => { window.location.reload(); }, 3000);
                         return; // Don't show window yet, let auto-reload attempt
                     }
 
