@@ -61,6 +61,24 @@ struct PlusEtfItem {
     ratio: f64,  // 비율
 }
 
+// ACE ETF API 응답 구조체
+// Structs for parsing ACE ETF JSON responses
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct AceEtfResponse {
+    pdfList: Vec<AceEtfPdfItem>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct AceEtfPdfItem {
+    wg: f64,               // weight
+    jm_KSC_CD: String,     // stock_code
+    val_AM: f64,           // price (평가금액)
+    cu_ITEM_CNT: String,   // quantity (수량, 문자열)
+    sec_NM: String,        // stock_name
+}
+
 // 메인 Tauri 커맨드
 // Main Tauri Command
 // 이 함수는 프론트엔드에서 직접 호출할 수 있습니다.
@@ -85,6 +103,7 @@ pub async fn get_etf_holdings(
         "plus" => fetch_plus(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "time" => fetch_time(&id, &code, &date).await.map_err(|e| e.to_string())?,
         "tiger" => fetch_tiger(&id, &code, &date).await.map_err(|e| e.to_string())?,
+        "ace" => fetch_ace(&id, &code, &date).await.map_err(|e| e.to_string())?,
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
@@ -625,6 +644,55 @@ async fn fetch_time(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
             weight,
             quantity,
             price,
+        });
+    }
+
+    Ok(holdings)
+}
+
+// ACE 데이터 가져오기 (JSON API)
+// Fetch ACE (Korea Investment) data using JSON API
+async fn fetch_ace(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box<dyn std::error::Error>> {
+    let clean_date = date.replace("-", "");
+
+    let url = format!(
+        "https://papi.aceetf.co.kr/api/funds/{}/pdf?page=1&size=1000&std_dt={}",
+        id, clean_date
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .build()?;
+
+    let mut headers = header::HeaderMap::new();
+    headers.insert("Origin", "https://www.aceetf.co.kr".parse().unwrap());
+    headers.insert("Referer", "https://www.aceetf.co.kr/".parse().unwrap());
+    headers.insert("Accept", "application/json, text/plain, */*".parse().unwrap());
+
+    let resp = client.get(&url)
+        .headers(headers)
+        .send()
+        .await?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Bad status: {}", resp.status()).into());
+    }
+
+    let parsed: AceEtfResponse = resp.json().await?;
+
+    let mut holdings = Vec::new();
+    for item in parsed.pdfList {
+        let quantity = item.cu_ITEM_CNT.replace(",", "").parse::<i64>().unwrap_or(0);
+
+        holdings.push(Holding {
+            date: date.to_string(),
+            etf_code: code.to_string(),
+            stock_code: item.jm_KSC_CD,
+            name: item.sec_NM,
+            weight: item.wg,
+            quantity,
+            price: item.val_AM,
         });
     }
 

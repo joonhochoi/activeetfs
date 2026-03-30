@@ -300,8 +300,9 @@ const UpdateTodayWindow: React.FC = () => {
             <h2 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', margin: '0 0 14px 0', fontSize: '1.2rem' }}>
                 Update All Today
                 <span style={{ fontSize: '0.95rem', color: '#94a3b8', marginLeft: '10px', fontWeight: 'normal' }}>
-                    {today} (평일 오전 8시 이후 사용을 추천)
+                    {today} (평일 오전 8시 이후 사용을 추천) * Tiger의 경우 오늘 값이 존재하지 않으므로 전 영업일 값을 갱신해주세요.
                 </span>
+
             </h2>
 
             {/* 툴바 */}
