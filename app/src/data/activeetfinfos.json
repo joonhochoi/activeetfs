@@ -339,6 +339,11 @@
       "view_url": "https://www.aceetf.co.kr/fund/{$}",
       "etfs": [
         {
+          "code": "0172Y0",
+          "name": "ACE K수출핵심TOP10산업액티브",
+          "id": "K55101ES8039"
+        },
+        {
           "code": "457480",
           "name": "ACE 테슬라밸류체인액티브",
           "id": "K55101E19387"
