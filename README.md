@@ -1,8 +1,9 @@
 # 📈 Active ETFs
 
-![Active ETFs](https://img.shields.io/badge/version-0.3.3-blue.svg)
+![Active ETFs](https://img.shields.io/badge/version-0.3.4-blue.svg)
 ![Tauri](https://img.shields.io/badge/Tauri-v2-orange.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB.svg)
+![Windows](https://img.shields.io/badge/Windows-10+-black.svg)
 ![macOS](https://img.shields.io/badge/macOS-Universal-black.svg)
 
 **Active ETFs**는 국내 다양한 자산운용사의 ETF(상장지수펀드) PDF(Portfolio Deposit File) 구성과 비중 변화를 손쉽게 수집하고, 직관적으로 시각화 및 비교 분석할 수 있는 **데스크톱 애플리케이션**입니다.
@@ -14,10 +15,10 @@
 이 프로젝트는 본래 웹서버에서 동작시킬 용도로 스크래퍼 로직부터 만들어두고 방치하던걸 바이브 코딩으로 해보면 좀 쉽게 되려나로 시작된 개인 작업물입니다.
 프로젝트 개발 툴은 Antigravity / Claude code 이며, 거의 90%이상의 코드는 Gemini+Claude 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
 
-* **Windows 용 설치 파일**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.3_x64-setup.exe)
+* **Windows 용 설치 파일**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.4_x64-setup.exe)
   * 최초 설치 시 "Windows의 PC 보호" 혹은 macOS의 "확인되지 않은 개발자" 경고가 뜰 수 있습니다. 이는 개인 개발자 배포 정책에 의한 것으로 안전하오니 안내에 따라 실행해 주세요. 
   * 이후 업데이트는 앱 시작 시 자동으로 체크하여 무중단 업데이트를 수행합니다.
-* **macOS 용 설치 파일 (Universal)**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.3_universal.dmg)
+* **macOS 용 설치 파일 (Universal)**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.4_universal.dmg)
 
 
 <br>
@@ -27,6 +28,7 @@
 ## ✨ 주요 기능 (Key Features)
 
 * **다양한 자산운용사 지원**: KODEX, 타임폴리오, Koact, RISE, PLUS 등 주요 운용사의 Active ETF를 지원하며 종목 리스트를 지속적으로 확장 중입니다.
+  * **Select Etfs**: 관심 ETF들을 선택하여 관리할 수 있습니다.(선택된 ETF들만 보여지고 업데이트함)
 * **네이티브 기반 독립 실행 (Tauri v2)**: Rust와 Tauri v2 아키텍처를 기반으로 백엔드가 구성되어 빠른 실행 속도와 낮은 리소스 점유율을 자랑합니다.
 * **무중단 자동 업데이트**: GitHub Actions를 통한 CI/CD 파이프라인이 구축되어 있어, 새로운 버전이 출시될 때마다 앱 시작 시 자동으로 감지하고 간편하게 업데이트할 수 있습니다.
 * **강력한 데이터 스크래핑**: 
