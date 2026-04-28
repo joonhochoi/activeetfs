@@ -87,6 +87,12 @@ pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error:
     let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN is_enabled BOOLEAN DEFAULT 1").execute(&pool).await;
     let _ = sqlx::query("UPDATE etfs SET is_enabled = 1 WHERE is_enabled IS NULL").execute(&pool).await;
 
+    // Migration: Add etf_id column (manager-specific product ID used for data fetching)
+    let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN etf_id TEXT DEFAULT ''").execute(&pool).await;
+
+    // Migration: Add is_user_added flag (distinguishes runtime-added ETFs from JSON-seeded ones)
+    let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN is_user_added BOOLEAN DEFAULT 0").execute(&pool).await;
+
     seed_db(&pool).await?;
 
     Ok(pool)
@@ -110,6 +116,8 @@ struct ManagerConfig {
 struct EtfConfig {
     code: String,
     name: String,
+    #[serde(default)]
+    id: Option<String>,
 }
 
 async fn seed_db(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
@@ -129,11 +137,15 @@ async fn seed_db(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
             .await?;
 
         for etf in manager.etfs {
-            // Use INSERT ... ON CONFLICT to preserve is_favorite
-            sqlx::query("INSERT INTO etfs (code, manager_id, name) VALUES (?, ?, ?) ON CONFLICT(code) DO UPDATE SET manager_id=excluded.manager_id, name=excluded.name")
+            let etf_id = etf.id.as_deref().unwrap_or("");
+            sqlx::query(
+                "INSERT INTO etfs (code, manager_id, name, etf_id, is_user_added) VALUES (?, ?, ?, ?, 0) \
+                 ON CONFLICT(code) DO UPDATE SET manager_id=excluded.manager_id, name=excluded.name, etf_id=excluded.etf_id, is_user_added=0"
+            )
                 .bind(&etf.code)
                 .bind(&manager.id)
                 .bind(&etf.name)
+                .bind(etf_id)
                 .execute(pool)
                 .await?;
         }

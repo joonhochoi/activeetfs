@@ -1,6 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import ChangelogModal from './ChangelogModal';
+import AddEtfModal from './AddEtfModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import pkg from '../../package.json';
@@ -20,6 +21,8 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(true);
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+    const [isAddEtfOpen, setIsAddEtfOpen] = React.useState(false);
+    const [sidebarKey, setSidebarKey] = React.useState(0);
 
     const openHelpWindow = async () => {
         setIsMenuOpen(false);
@@ -141,6 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                 <div style={{ height: '20px' }}></div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     <Sidebar
+                        key={sidebarKey}
                         onSelectEtf={onSelectEtf}
                         favorites={favorites}
                     />
@@ -222,6 +226,13 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                                 style={{ paddingLeft: '16px' }}
                             >
                                 Select ETFs
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); setIsAddEtfOpen(true); }}
+                                className="menu-item"
+                                style={{ paddingLeft: '16px' }}
+                            >
+                                Add New ETF
                             </button>
                             <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                             <button
@@ -315,6 +326,11 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                     </div>
                 </aside>
             )}
+            <AddEtfModal
+                isOpen={isAddEtfOpen}
+                onClose={() => setIsAddEtfOpen(false)}
+                onEtfAdded={() => setSidebarKey(k => k + 1)}
+            />
             <ChangelogModal
                 isOpen={isChangelogOpen}
                 onClose={() => setIsChangelogOpen(false)}

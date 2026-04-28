@@ -314,6 +314,83 @@ pub async fn save_etf_enabled_list(
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddEtfResult {
+    pub status: String, // "added" | "exists" | "error"
+    pub etf_name: Option<String>,
+    pub message: String,
+}
+
+#[tauri::command]
+pub async fn add_etf_from_url(
+    state: tauri::State<'_, AppState>,
+    url: String,
+) -> Result<AddEtfResult, String> {
+    let info = match crate::fetch::fetch_etf_info_from_url(&url).await {
+        Ok(i) => i,
+        Err(e) => return Ok(AddEtfResult {
+            status: "error".to_string(),
+            etf_name: None,
+            message: e.to_string(),
+        }),
+    };
+
+    let existing: Option<String> = sqlx::query_scalar("SELECT name FROM etfs WHERE code = ?")
+        .bind(&info.code)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(name) = existing {
+        return Ok(AddEtfResult {
+            status: "exists".to_string(),
+            etf_name: Some(name.clone()),
+            message: "목록에 이미 존재하는 ETF입니다.".to_string(),
+        });
+    }
+
+    sqlx::query(
+        "INSERT INTO etfs (code, manager_id, name, etf_id, is_user_added, is_enabled) VALUES (?, ?, ?, ?, 1, 1)"
+    )
+    .bind(&info.code)
+    .bind(&info.manager_id)
+    .bind(&info.name)
+    .bind(&info.etf_id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(AddEtfResult {
+        status: "added".to_string(),
+        etf_name: Some(info.name.clone()),
+        message: format!("[{}] 이(가) 추가되었습니다.", info.name),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct UserEtf {
+    pub code: String,
+    pub name: String,
+    pub manager_id: String,
+    pub etf_id: String,
+}
+
+#[tauri::command]
+pub async fn get_user_added_etfs(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<UserEtf>, String> {
+    let rows = sqlx::query_as::<_, UserEtf>(
+        "SELECT code, name, manager_id, COALESCE(etf_id, '') as etf_id FROM etfs WHERE is_user_added = 1"
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
 #[tauri::command]
 pub fn get_changelog() -> String {
     include_str!("../../../CHANGELOG.md").to_string()

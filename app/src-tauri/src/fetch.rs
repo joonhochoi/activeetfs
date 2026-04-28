@@ -698,3 +698,278 @@ async fn fetch_ace(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box
 
     Ok(holdings)
 }
+
+// ── URL로부터 ETF 정보 조회 (Add New ETF 기능용) ──────────────────────────
+
+pub struct ParsedEtfInfo {
+    pub manager_id: String,
+    pub etf_id: String,
+    pub code: String,
+    pub name: String,
+}
+
+fn build_client() -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .build()
+}
+
+pub async fn fetch_etf_info_from_url(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    if url.contains("timeetf.co.kr") {
+        fetch_time_etf_info(url).await
+    } else if url.contains("samsungactive.co.kr") {
+        fetch_koact_etf_info(url).await
+    } else if url.contains("samsungfund.com") {
+        fetch_kodex_etf_info(url).await
+    } else if url.contains("riseetf.co.kr") {
+        fetch_rise_etf_info(url).await
+    } else if url.contains("plusetf.co.kr") {
+        fetch_plus_etf_info(url).await
+    } else if url.contains("miraeasset.com") {
+        fetch_tiger_etf_info(url).await
+    } else if url.contains("aceetf.co.kr") {
+        fetch_ace_etf_info(url).await
+    } else {
+        Err("지원되지 않는 URL입니다. 아래 운용사 목록에 있는 URL을 입력해주세요.".into())
+    }
+}
+
+// ── Timefolio ─────────────────────────────────────────────────────────────
+// URL 형태: https://timeetf.co.kr/m11_view.php?idx=22
+async fn fetch_time_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url
+        .split("idx=").nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 idx 파라미터를 찾을 수 없습니다. (예: https://timeetf.co.kr/m11_view.php?idx=22)")?;
+
+    let client = build_client()?;
+    let resp = client.get(url).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("페이지 요청 실패: {}", resp.status()).into());
+    }
+    let html = resp.text().await?;
+    let document = Html::parse_document(&html);
+
+    let code_sel = Selector::parse(".prdNum span").unwrap();
+    let code = document.select(&code_sel).next()
+        .map(|e| e.text().collect::<String>().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 종목코드(.prdNum span)를 찾을 수 없습니다.")?;
+
+    let name_sel = Selector::parse(".prdName").unwrap();
+    let name = document.select(&name_sel).next()
+        .map(|e| e.text().map(|s| s.trim()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" "))
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 ETF 이름(.prdName)을 찾을 수 없습니다.")?;
+
+    Ok(ParsedEtfInfo { manager_id: "timefolio".to_string(), etf_id, code, name })
+}
+
+// ── KoAct (삼성액티브) ────────────────────────────────────────────────────
+// URL 형태: https://www.samsungactive.co.kr/etf/view.do?id=2ETFM8
+async fn fetch_koact_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.split("id=").nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 id 파라미터를 찾을 수 없습니다. (예: https://www.samsungactive.co.kr/etf/view.do?id=2ETFM8)")?;
+
+    #[derive(serde::Deserialize)]
+    struct Item { #[serde(rename = "fId")] f_id: String, #[serde(rename = "stkTicker")] stk_ticker: String, #[serde(rename = "fNm")] f_nm: String }
+    #[derive(serde::Deserialize)]
+    struct Resp { etfs: Vec<Item> }
+
+    let client = build_client()?;
+    let data: Resp = client
+        .get("https://www.samsungactive.co.kr/api/v1/product/etf.do")
+        .header("Referer", "https://www.samsungactive.co.kr/etf/list.do")
+        .send().await?.json().await?;
+
+    let item = data.etfs.iter().find(|e| e.f_id == etf_id)
+        .ok_or(format!("KoAct 상품 목록에서 id={}를 찾을 수 없습니다.", etf_id))?;
+
+    Ok(ParsedEtfInfo { manager_id: "koact".to_string(), etf_id, code: item.stk_ticker.clone(), name: item.f_nm.clone() })
+}
+
+// ── KODEX (삼성자산운용) ──────────────────────────────────────────────────
+// URL 형태: https://www.samsungfund.com/etf/product/view.do?id=2ETFH5
+async fn fetch_kodex_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.split("id=").nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 id 파라미터를 찾을 수 없습니다. (예: https://www.samsungfund.com/etf/product/view.do?id=2ETFH5)")?;
+
+    #[derive(serde::Deserialize)]
+    struct Item { #[serde(rename = "fId")] f_id: String, #[serde(rename = "stkTicker")] stk_ticker: String, #[serde(rename = "fNm")] f_nm: String }
+
+    let client = build_client()?;
+    let data: Vec<Item> = client
+        .get("https://www.samsungfund.com/api/v1/kodex/product.do")
+        .header("Referer", "https://www.samsungfund.com/etf/product/list.do")
+        .send().await?.json().await?;
+
+    let item = data.iter().find(|e| e.f_id == etf_id)
+        .ok_or(format!("KODEX 상품 목록에서 id={}를 찾을 수 없습니다. (최근 출시 ETF만 지원됩니다)", etf_id))?;
+
+    Ok(ParsedEtfInfo { manager_id: "kodex".to_string(), etf_id, code: item.stk_ticker.clone(), name: item.f_nm.clone() })
+}
+
+// ── RISE (KB자산운용) ─────────────────────────────────────────────────────
+// URL 형태: https://www.riseetf.co.kr/prod/finderDetail/44K0
+async fn fetch_rise_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.trim_end_matches('/')
+        .rsplit('/').next()
+        .and_then(|s| s.split('?').next())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 ETF ID를 찾을 수 없습니다. (예: https://www.riseetf.co.kr/prod/finderDetail/44K0)")?;
+
+    let client = build_client()?;
+    let resp = client.get(url).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("페이지 요청 실패: {}", resp.status()).into());
+    }
+    let html = resp.text().await?;
+    let document = Html::parse_document(&html);
+
+    // 이름: <title>RISE ETF명 - RISE ETF</title>
+    let title_sel = Selector::parse("title").unwrap();
+    let name = document.select(&title_sel).next()
+        .map(|e| e.text().collect::<String>())
+        .map(|t| t.split(" - ").next().unwrap_or("").trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 ETF 이름을 찾을 수 없습니다.")?;
+
+    // 코드: 현재 ETF 링크 href 근처에 있는 span.number 텍스트
+    let link_pattern = format!("/prod/finderDetail/{}", etf_id);
+    let code = extract_rise_code(&html, &link_pattern)
+        .ok_or("페이지에서 종목코드(span.number)를 찾을 수 없습니다.")?;
+
+    Ok(ParsedEtfInfo { manager_id: "rise".to_string(), etf_id, code, name })
+}
+
+fn extract_rise_code(html: &str, link_pattern: &str) -> Option<String> {
+    let pos = html.find(link_pattern)?;
+    let after = &html[pos..];
+    // link → span.number 순서로 탐색
+    let span_start = after.find(r#"class="number""#)?;
+    let span_tail = &after[span_start..];
+    let open = span_tail.find('(')?;
+    let close = span_tail[open..].find(')')?;
+    let code = span_tail[open + 1..open + close].trim().to_string();
+    if code.is_empty() { None } else { Some(code) }
+}
+
+// ── PLUS (한화자산운용) ───────────────────────────────────────────────────
+// URL 형태: https://www.plusetf.co.kr/product/detail?n=006397
+async fn fetch_plus_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.split("n=").nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 n 파라미터를 찾을 수 없습니다. (예: https://www.plusetf.co.kr/product/detail?n=006397)")?;
+
+    let client = build_client()?;
+    let resp = client.get(url).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("페이지 요청 실패: {}", resp.status()).into());
+    }
+    let html = resp.text().await?;
+    let document = Html::parse_document(&html);
+
+    // 이름: <title>PLUS ETF명 | PLUS ETF</title>
+    let title_sel = Selector::parse("title").unwrap();
+    let name = document.select(&title_sel).next()
+        .map(|e| e.text().collect::<String>())
+        .map(|t| t.split(" | ").next().unwrap_or("").trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 ETF 이름을 찾을 수 없습니다.")?;
+
+    // 코드: div.summary__product-code
+    let code_sel = Selector::parse(".summary__product-code").unwrap();
+    let code = document.select(&code_sel).next()
+        .map(|e| e.text().collect::<String>().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 종목코드(.summary__product-code)를 찾을 수 없습니다.")?;
+
+    Ok(ParsedEtfInfo { manager_id: "plus".to_string(), etf_id, code, name })
+}
+
+// ── TIGER (미래에셋) ──────────────────────────────────────────────────────
+// URL 형태: https://investments.miraeasset.com/tigeretf/ko/product/search/detail/index.do?ksdFund=KR70168K0008
+async fn fetch_tiger_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.split("ksdFund=").nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 ksdFund 파라미터를 찾을 수 없습니다. (예: ...?ksdFund=KR70168K0008)")?;
+
+    let client = build_client()?;
+    let resp = client.get(url).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("페이지 요청 실패: {}", resp.status()).into());
+    }
+    let html = resp.text().await?;
+    let document = Html::parse_document(&html);
+
+    // 종목코드: input[name="jongCode"] value
+    let code_sel = Selector::parse(r#"input[name="jongCode"]"#).unwrap();
+    let code = document.select(&code_sel).next()
+        .and_then(|e| e.value().attr("value"))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 종목코드(input[name=jongCode])를 찾을 수 없습니다.")?;
+
+    // ETF 이름: input[name="jongName"] value
+    let name_sel = Selector::parse(r#"input[name="jongName"]"#).unwrap();
+    let name = document.select(&name_sel).next()
+        .and_then(|e| e.value().attr("value"))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("페이지에서 ETF 이름(input[name=jongName])을 찾을 수 없습니다.")?;
+
+    Ok(ParsedEtfInfo { manager_id: "tiger".to_string(), etf_id, code, name })
+}
+
+// ── ACE (한국투자신탁운용) ────────────────────────────────────────────────
+// URL 형태: https://www.aceetf.co.kr/fund/K55101ES8039
+async fn fetch_ace_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let etf_id = url.trim_end_matches('/')
+        .rsplit('/').next()
+        .and_then(|s| s.split('?').next())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("URL에서 ETF ID를 찾을 수 없습니다. (예: https://www.aceetf.co.kr/fund/K55101ES8039)")?;
+
+    #[derive(serde::Deserialize)]
+    struct AceFundInfo {
+        #[serde(rename = "fundNm")]
+        fund_nm: String,
+        #[serde(rename = "stockCd")]
+        stock_cd: String, // ISIN: KR7{6자리코드}{체크}
+    }
+
+    let api_url = format!("https://papi.aceetf.co.kr/api/funds/{}", etf_id);
+    let client = build_client()?;
+    let mut hdrs = header::HeaderMap::new();
+    hdrs.insert("Origin", "https://www.aceetf.co.kr".parse().unwrap());
+    hdrs.insert("Referer", "https://www.aceetf.co.kr/".parse().unwrap());
+
+    let resp = client.get(&api_url).headers(hdrs).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("ACE API 요청 실패: {} (id={})", resp.status(), etf_id).into());
+    }
+    let info: AceFundInfo = resp.json().await?;
+
+    // ISIN KR7{코드6자리}{체크3자리} → 코드는 [3..9]
+    if info.stock_cd.len() < 9 {
+        return Err(format!("잘못된 ISIN 코드: {}", info.stock_cd).into());
+    }
+    let code = info.stock_cd[3..9].to_string();
+
+    Ok(ParsedEtfInfo { manager_id: "ace".to_string(), etf_id, code, name: info.fund_nm })
+}
