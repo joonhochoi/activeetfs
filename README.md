@@ -1,6 +1,6 @@
 # 📈 Active ETFs
 
-![Active ETFs](https://img.shields.io/badge/version-0.3.4-blue.svg)
+![Active ETFs](https://img.shields.io/badge/version-0.3.5-blue.svg)
 ![Tauri](https://img.shields.io/badge/Tauri-v2-orange.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB.svg)
 ![Windows](https://img.shields.io/badge/Windows-10+-black.svg)
@@ -15,10 +15,10 @@
 이 프로젝트는 본래 웹서버에서 동작시킬 용도로 스크래퍼 로직부터 만들어두고 방치하던걸 바이브 코딩으로 해보면 좀 쉽게 되려나로 시작된 개인 작업물입니다.
 프로젝트 개발 툴은 Antigravity / Claude code 이며, 거의 90%이상의 코드는 Gemini+Claude 에 의해 만들어진 코드입니다. 개인적으로는 Tauri를 첨 써보며 어떻게 사용하는건지 확인하는 차원의 프로젝트이기도 합니다.
 
-* **Windows 용 설치 파일**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.4_x64-setup.exe)
+* **Windows 용 설치 파일**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.5_x64-setup.exe)
   * 최초 설치 시 "Windows의 PC 보호" 혹은 macOS의 "확인되지 않은 개발자" 경고가 뜰 수 있습니다. 이는 개인 개발자 배포 정책에 의한 것으로 안전하오니 안내에 따라 실행해 주세요. 
   * 이후 업데이트는 앱 시작 시 자동으로 체크하여 무중단 업데이트를 수행합니다.
-* **macOS 용 설치 파일 (Universal)**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.4_universal.dmg)
+* **macOS 용 설치 파일 (Universal)**: [다운로드](https://github.com/joonhochoi/activeetfs/releases/latest/download/activeetfs_0.3.5_universal.dmg)
 
 
 <br>
