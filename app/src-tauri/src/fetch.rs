@@ -838,6 +838,52 @@ async fn fetch_time_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::er
     Ok(ParsedEtfInfo { manager_id: "timefolio".to_string(), etf_id, code, name })
 }
 
+// ── 삼성(KoAct/KODEX) 공통: id별 상세 API로 종목코드·이름 조회 ───────────────
+// 과거에는 전체 목록(product.do / etf.do)을 받아 fId로 찾았으나, 이 목록 엔드포인트는
+// 전체 상품 중 일부(약 20개)만 반환하여 목록에 없는 ETF는 추가가 불가능했다.
+// id별 상세 엔드포인트는 모든 상품을 조회할 수 있고 응답의 info.product 안에
+// fId / stkTicker / fNm 가 들어 있다. KoAct와 KODEX의 응답 구조가 동일하다.
+async fn fetch_samsung_etf_detail(
+    detail_url: &str,
+    referer: &str,
+    manager_id: &str,
+    etf_id: String,
+) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
+    #[derive(serde::Deserialize)]
+    struct Product {
+        #[serde(rename = "fId")] f_id: String,
+        #[serde(rename = "stkTicker")] stk_ticker: String,
+        #[serde(rename = "fNm")] f_nm: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Info { product: Product }
+    #[derive(serde::Deserialize)]
+    struct Resp { info: Info }
+
+    let client = build_client()?;
+    let resp = client.get(detail_url).header("Referer", referer).send().await?;
+    if !resp.status().is_success() {
+        return Err(format!("상품 정보 요청 실패: {} (id={})", resp.status(), etf_id).into());
+    }
+    let data: Resp = resp.json().await?;
+    let p = data.info.product;
+
+    // 잘못된 id에 대해 기본 상품이 반환되는 경우를 막기 위해 응답 id를 검증한다.
+    if p.f_id != etf_id {
+        return Err(format!("해당 id({})의 상품을 찾을 수 없습니다.", etf_id).into());
+    }
+    if p.stk_ticker.trim().is_empty() {
+        return Err(format!("상품 정보에서 종목코드를 찾을 수 없습니다. (id={})", etf_id).into());
+    }
+
+    Ok(ParsedEtfInfo {
+        manager_id: manager_id.to_string(),
+        etf_id,
+        code: p.stk_ticker,
+        name: p.f_nm,
+    })
+}
+
 // ── KoAct (삼성액티브) ────────────────────────────────────────────────────
 // URL 형태: https://www.samsungactive.co.kr/etf/view.do?id=2ETFM8
 async fn fetch_koact_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::error::Error + Send + Sync>> {
@@ -847,21 +893,9 @@ async fn fetch_koact_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::e
         .filter(|s| !s.is_empty())
         .ok_or("URL에서 id 파라미터를 찾을 수 없습니다. (예: https://www.samsungactive.co.kr/etf/view.do?id=2ETFM8)")?;
 
-    #[derive(serde::Deserialize)]
-    struct Item { #[serde(rename = "fId")] f_id: String, #[serde(rename = "stkTicker")] stk_ticker: String, #[serde(rename = "fNm")] f_nm: String }
-    #[derive(serde::Deserialize)]
-    struct Resp { etfs: Vec<Item> }
-
-    let client = build_client()?;
-    let data: Resp = client
-        .get("https://www.samsungactive.co.kr/api/v1/product/etf.do")
-        .header("Referer", "https://www.samsungactive.co.kr/etf/list.do")
-        .send().await?.json().await?;
-
-    let item = data.etfs.iter().find(|e| e.f_id == etf_id)
-        .ok_or(format!("KoAct 상품 목록에서 id={}를 찾을 수 없습니다.", etf_id))?;
-
-    Ok(ParsedEtfInfo { manager_id: "koact".to_string(), etf_id, code: item.stk_ticker.clone(), name: item.f_nm.clone() })
+    let detail_url = format!("https://www.samsungactive.co.kr/api/v1/product/etf/{}.do", etf_id);
+    let referer = format!("https://www.samsungactive.co.kr/etf/view.do?id={}", etf_id);
+    fetch_samsung_etf_detail(&detail_url, &referer, "koact", etf_id).await
 }
 
 // ── KODEX (삼성자산운용) ──────────────────────────────────────────────────
@@ -873,19 +907,9 @@ async fn fetch_kodex_etf_info(url: &str) -> Result<ParsedEtfInfo, Box<dyn std::e
         .filter(|s| !s.is_empty())
         .ok_or("URL에서 id 파라미터를 찾을 수 없습니다. (예: https://www.samsungfund.com/etf/product/view.do?id=2ETFH5)")?;
 
-    #[derive(serde::Deserialize)]
-    struct Item { #[serde(rename = "fId")] f_id: String, #[serde(rename = "stkTicker")] stk_ticker: String, #[serde(rename = "fNm")] f_nm: String }
-
-    let client = build_client()?;
-    let data: Vec<Item> = client
-        .get("https://www.samsungfund.com/api/v1/kodex/product.do")
-        .header("Referer", "https://www.samsungfund.com/etf/product/list.do")
-        .send().await?.json().await?;
-
-    let item = data.iter().find(|e| e.f_id == etf_id)
-        .ok_or(format!("KODEX 상품 목록에서 id={}를 찾을 수 없습니다. (최근 출시 ETF만 지원됩니다)", etf_id))?;
-
-    Ok(ParsedEtfInfo { manager_id: "kodex".to_string(), etf_id, code: item.stk_ticker.clone(), name: item.f_nm.clone() })
+    let detail_url = format!("https://www.samsungfund.com/api/v1/kodex/product/{}.do", etf_id);
+    let referer = format!("https://www.samsungfund.com/etf/product/view.do?id={}", etf_id);
+    fetch_samsung_etf_detail(&detail_url, &referer, "kodex", etf_id).await
 }
 
 // ── RISE (KB자산운용) ─────────────────────────────────────────────────────

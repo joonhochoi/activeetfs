@@ -173,6 +173,12 @@
 
 ---
 
+## 5-bis. URL 추가 — 삼성(KoAct/KODEX) 상품 조회 한계 수정
+
+> ✅ **처리 완료** — KoAct/KODEX의 URL 추가가 전체 목록 엔드포인트(`product.do`/`etf.do`)에서 fId를 찾는 방식이라, 이 목록이 전체 238개 중 ~20개만 반환해 목록 밖 ETF(예: `2ETFT4` KODEX 미국성장커버드콜액티브)는 "최근 출시 ETF만 지원됩니다" 오류로 추가가 불가능했다. **id별 상세 엔드포인트**(`api/v1/kodex/product/{id}.do`, `api/v1/product/etf/{id}.do`)의 `info.product.{fId,stkTicker,fNm}`를 읽는 방식으로 교체해 모든 상품을 추가 가능하게 함(`fetch_samsung_etf_detail` 공통 헬퍼). 잘못된 id는 응답 id 검증 + status 체크로 깔끔히 거른다.
+
+---
+
 ## 6. 추가하면 좋을 기능 제안
 
 1. ✅ **사용자 추가 ETF 업데이트 지원 (1-1에서 해결 완료)** — Dashboard 개별 Update·UpdateAll·UpdateToday가 모두 `getAllEtfTargets()`(카탈로그+DB)를 사용. 더불어 Select ETFs 창에도 사용자 추가 ETF를 노출(`추가` 배지)해 활성/비활성 토글까지 가능하도록 보강.
