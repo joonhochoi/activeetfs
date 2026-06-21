@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
-import activeEtfInfos from '../data/activeetfinfos.json';
+import { getAllEtfTargets } from '../utils/etfs';
 
 type EtfStatus = 'waiting' | 'has_data' | 'updating' | 'pass' | 'success' | 'error';
 
@@ -15,8 +15,8 @@ interface EtfRow {
     etfCode: string;
     etfName: string;
     managerName: string;
-    manager: any;
-    etf: any;
+    provider: string;
+    id: string;
     status: EtfStatus;
     compareDate: string | null;
     inStocks: StockItem[];
@@ -128,30 +128,28 @@ const UpdateTodayWindow: React.FC = () => {
             setShowTimeWarning(true);
         }
 
-        invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
-            .catch(() => null)
-            .then(enabledList => {
+        (async () => {
+                const enabledList = await invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
+                    .catch(() => null);
                 const enabledCodes = enabledList
                     ? new Set(enabledList.filter(e => e.isEnabled).map(e => e.code))
                     : null;
 
-                const allRows: EtfRow[] = [];
-                activeEtfInfos.managers.forEach((manager: any) => {
-                    (manager.etfs as any[]).forEach((etf: any) => {
-                        if (enabledCodes && !enabledCodes.has(etf.code)) return;
-                        allRows.push({
-                            etfCode: etf.code,
-                            etfName: etf.name,
-                            managerName: manager.name,
-                            manager,
-                            etf,
-                            status: 'waiting',
-                            compareDate: null,
-                            inStocks: [],
-                            outStocks: [],
-                        });
-                    });
-                });
+                // 카탈로그 + 사용자 추가(URL) ETF를 모두 포함한다.
+                const targets = await getAllEtfTargets();
+                const allRows: EtfRow[] = targets
+                    .filter(t => !enabledCodes || enabledCodes.has(t.code))
+                    .map(t => ({
+                        etfCode: t.code,
+                        etfName: t.name,
+                        managerName: t.managerName,
+                        provider: t.provider,
+                        id: t.id,
+                        status: 'waiting' as EtfStatus,
+                        compareDate: null,
+                        inStocks: [],
+                        outStocks: [],
+                    }));
                 setRows(allRows);
 
                 // 비교 날짜 + 오늘 데이터 존재 여부 병렬 로딩
@@ -171,7 +169,7 @@ const UpdateTodayWindow: React.FC = () => {
                         });
                     }).catch(() => { });
                 });
-            });
+        })();
     }, []);
 
     const handleUpdateToday = async () => {
@@ -202,8 +200,8 @@ const UpdateTodayWindow: React.FC = () => {
                 return next;
             });
 
-            const provider = row.manager.type || row.manager.id;
-            const id = row.etf.id;
+            const provider = row.provider;
+            const id = row.id;
             const code = row.etfCode;
 
             try {

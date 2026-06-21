@@ -4,7 +4,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
-import activeEtfInfos from '../data/activeetfinfos.json';
+import { getAllEtfTargets } from '../utils/etfs';
 
 interface LogItem {
     time: string;
@@ -64,13 +64,11 @@ const UpdateAllWindow: React.FC = () => {
         const enabledList = await invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list').catch(() => null);
         const enabledCodes = enabledList ? new Set(enabledList.filter(e => e.isEnabled).map(e => e.code)) : null;
 
-        const allEtfs: { manager: any, etf: any }[] = [];
-        activeEtfInfos.managers.forEach(manager => {
-            manager.etfs.forEach(etf => {
-                if (enabledCodes && !enabledCodes.has(etf.code)) return;
-                allEtfs.push({ manager, etf });
-            });
-        });
+        // 카탈로그 + 사용자 추가(URL) ETF를 모두 포함해 일괄 수집한다.
+        const allTargets = await getAllEtfTargets();
+        const allEtfs = enabledCodes
+            ? allTargets.filter(t => enabledCodes.has(t.code))
+            : allTargets;
 
         const totalEtfs = allEtfs.length;
         const totalDates = sortedSelectedDates.length;
@@ -82,7 +80,7 @@ const UpdateAllWindow: React.FC = () => {
             addLog(`\n━━━ [${d + 1}/${totalDates}] Date: ${targetDateStr} ━━━`, 'pending');
 
             for (let i = 0; i < totalEtfs; i++) {
-                const { manager, etf } = allEtfs[i];
+                const target = allEtfs[i];
                 setProgress({
                     currentDate: targetDateStr,
                     currentEtf: i + 1,
@@ -91,25 +89,21 @@ const UpdateAllWindow: React.FC = () => {
                     totalDates
                 });
 
-                const provider = manager.type || manager.id;
-                const id = etf.id;
-                const code = etf.code;
-
                 try {
                     // Add a small initial delay for the first item to let the environment settle
                     if (d === 0 && i === 0) await new Promise(r => setTimeout(r, 500));
 
                     await invoke<string>('get_etf_holdings', {
-                        provider,
-                        id,
-                        code,
+                        provider: target.provider,
+                        id: target.id,
+                        code: target.code,
                         date: targetDateStr
                     });
 
-                    addLog(`[${etf.name}] 데이터 가져오기 ... [성공]`, 'success');
+                    addLog(`[${target.name}] 데이터 가져오기 ... [성공]`, 'success');
                 } catch (e) {
-                    addLog(`[${etf.name}] 데이터 가져오기 ... [실패: ${e}]`, 'error');
-                    console.error(`Update failed for ${etf.name}:`, e);
+                    addLog(`[${target.name}] 데이터 가져오기 ... [실패: ${e}]`, 'error');
+                    console.error(`Update failed for ${target.name}:`, e);
                 }
 
                 // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보

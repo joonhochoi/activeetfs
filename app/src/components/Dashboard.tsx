@@ -6,8 +6,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Holding } from '../types';
-import activeEtfInfos from '../data/activeetfinfos.json';
 import HoldingsTable from './HoldingsTable';
+import { resolveEtf, fetchUserEtfs, UserEtf } from '../utils/etfs';
 
 interface DashboardProps {
     etfCode: string;
@@ -68,8 +68,13 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     const [logs, setLogs] = useState<LogItem[]>([]);
     const logsEndRef = useRef<HTMLDivElement>(null);
 
-    const manager = activeEtfInfos.managers.find(m => m.etfs.some(e => e.code === etfCode));
-    const etf = manager?.etfs.find(e => e.code === etfCode);
+    // 사용자 추가(URL) ETF까지 포함해 선택된 ETF의 수집 정보를 해석한다.
+    const [userEtfs, setUserEtfs] = useState<UserEtf[]>([]);
+    const resolved = useMemo(() => resolveEtf(etfCode, userEtfs), [etfCode, userEtfs]);
+
+    useEffect(() => {
+        fetchUserEtfs().then(setUserEtfs);
+    }, []);
 
     const addLog = (message: string, type: 'info' | 'success' | 'error' | 'analysis' = 'info') => {
         const time = new Date().toLocaleTimeString();
@@ -325,7 +330,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     };
 
     const handleScrape = async () => {
-        if (!manager || !etf) return;
+        if (!resolved) return;
 
         const datesToScrape = Array.from(updateCandidates).sort();
         if (datesToScrape.length === 0) {
@@ -345,14 +350,10 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             addLog(`Starting update for ${dateStr}...`, 'info');
 
             try {
-                const provider = (manager as any).type || manager.id;
-                const id = (etf as any).id;
-                const code = etf.code;
-
                 const output = await invoke<string>('get_etf_holdings', {
-                    provider,
-                    id,
-                    code,
+                    provider: resolved.provider,
+                    id: resolved.id,
+                    code: resolved.code,
                     date: dateStr
                 });
 
@@ -374,16 +375,14 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     };
 
     const handleHeaderDoubleClick = async () => {
-        if (!manager || !manager.view_url || !etf) return;
+        if (!resolved || !resolved.viewUrl) return;
 
-        const idVal = (etf as any).id;
-
-        if (!idVal) {
+        if (!resolved.id) {
             addLog("Could not find ETF ID for URL", "error");
             return;
         }
 
-        const url = manager.view_url.replace('{$}', idVal);
+        const url = resolved.viewUrl.replace('{$}', resolved.id);
         try {
             await openUrl(url);
         } catch (e) {
@@ -397,19 +396,40 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             return;
         }
 
-        const startStr = toLocalDateString(viewStartDate);
-        const endStr = toLocalDateString(viewEndDate);
+        // 실제 데이터가 있는 날짜 목록. 선택한 날짜에 데이터가 없으면 "그 날짜 이하의 가장 가까운 데이터일"로 스냅한다.
+        const availableDates = Array.from(new Set(holdings.map(h => h.date))).sort();
+        if (availableDates.length === 0) {
+            addLog("No data found", "error");
+            return;
+        }
+        const snapToData = (target: string): string => {
+            let snapped = availableDates[0];
+            for (const d of availableDates) {
+                if (d <= target) snapped = d; else break;
+            }
+            return snapped;
+        };
+
+        const reqStart = toLocalDateString(viewStartDate);
+        const reqEnd = toLocalDateString(viewEndDate);
+        const startStr = snapToData(reqStart);
+        const endStr = snapToData(reqEnd);
+
+        if (startStr !== reqStart || endStr !== reqEnd) {
+            addLog(`선택일에 데이터가 없어 가장 가까운 데이터일로 보정: ${startStr} ~ ${endStr}`, "info");
+        }
+
+        if (startStr === endStr) {
+            addLog(`비교할 두 날짜가 동일합니다 (${startStr}). 다른 기간을 선택해주세요.`, "error");
+            return;
+        }
 
         const startHoldings = holdings.filter(h => h.date === startStr);
         const endHoldings = holdings.filter(h => h.date === endStr);
 
-        if (startHoldings.length === 0 || endHoldings.length === 0) {
-            addLog(`No data found for ${startStr} or ${endStr}`, "error");
-            return;
-        }
-
-        const startMap = new Map(startHoldings.map(h => [h.name, h.weight]));
-        const endMap = new Map(endHoldings.map(h => [h.name, h.weight]));
+        // 편입/편출 판정은 종목코드(stock_code) 기준으로 한다. (종목명은 표기 변동이 있을 수 있어 오탐 위험)
+        const startMap = new Map(startHoldings.map(h => [h.stock_code, h.weight]));
+        const endMap = new Map(endHoldings.map(h => [h.stock_code, h.weight]));
 
         // Pre-calculate date structure for event finding
         const rangeHoldings = holdings.filter(h => h.date >= startStr && h.date <= endStr);
@@ -420,7 +440,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         sortedRangeDates.forEach(d => dateToStocks.set(d, new Set()));
 
         rangeHoldings.forEach(h => {
-            dateToStocks.get(h.date)?.add(h.name);
+            dateToStocks.get(h.date)?.add(h.stock_code);
         });
 
         const inStocks: { name: string; display: string }[] = [];
@@ -428,9 +448,9 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
         // Check for In
         endHoldings.forEach(h => {
-            if (!startMap.has(h.name)) {
+            if (!startMap.has(h.stock_code)) {
                 // Find first date present
-                const firstAppearDate = sortedRangeDates.find(d => dateToStocks.get(d)?.has(h.name));
+                const firstAppearDate = sortedRangeDates.find(d => dateToStocks.get(d)?.has(h.stock_code));
                 const dateDisplay = firstAppearDate ? firstAppearDate.slice(5) : '??-??'; // 2023-01-01 -> 01-01
                 inStocks.push({ name: h.name, display: `${h.name} (${dateDisplay})` });
             }
@@ -438,9 +458,9 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
         // Check for Out
         startHoldings.forEach(h => {
-            if (!endMap.has(h.name)) {
+            if (!endMap.has(h.stock_code)) {
                 // Find first date missing (after start)
-                const firstMissingIndex = sortedRangeDates.findIndex(d => !dateToStocks.get(d)?.has(h.name));
+                const firstMissingIndex = sortedRangeDates.findIndex(d => !dateToStocks.get(d)?.has(h.stock_code));
                 // If it's missing at index i, it was present at i-1.
                 // Since it's in startHoldings (index 0), firstMissingIndex should be > 0.
                 let lastPresentDate = '??-??';
@@ -764,7 +784,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             }}
                             title="Double click to open on web"
                         >
-                            {etf?.name || etfCode}
+                            {resolved?.name || etfCode}
                         </h2>
                         {etfCode && onToggleFavorite && (
                             <button
@@ -784,7 +804,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                             </button>
                         )}
                     </div>
-                    <span style={{ color: 'var(--secondary-color)', fontSize: '0.9rem' }}>{etfCode} • {manager?.name}</span>
+                    <span style={{ color: 'var(--secondary-color)', fontSize: '0.9rem' }}>{etfCode} • {resolved?.managerName}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>

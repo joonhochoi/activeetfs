@@ -1,9 +1,3 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 mod db;
 mod commands;
 mod fetch;
@@ -32,11 +26,7 @@ pub fn run(context: tauri::Context) {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
-            greet, 
-            commands::run_sidecar, 
             commands::get_holdings,
-            commands::analyze_changes,
-            commands::analyze_trends,
             commands::get_favorite_etfs,
             commands::toggle_etf_favorite,
             fetch::get_etf_holdings,

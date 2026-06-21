@@ -437,20 +437,19 @@ async fn fetch_plus(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
                 name: item.jm_nm,
                 weight: item.ratio,
                 quantity: item.amount as i64,
-                price: 0.0, // PLUS API에는 가격 정보가 없음
+                // 주의: PLUS(한화) PDF API는 종목별 평가금액(가격)을 제공하지 않는다.
+                // 따라서 PLUS ETF의 holdings.price는 항상 0이며, 금액 기반 분석을 추가할 때
+                // PLUS만 가격이 비어 있다는 점을 별도로 처리해야 한다. (weight/quantity는 정상)
+                price: 0.0,
             });
         }
 
         page += 1;
-        
-        // 너무 빠른 요청 방지
-        if total_pages > 5 {
-            std::thread::sleep(Duration::from_millis(200)); 
-        } else {
-            // async 환경에서는 async sleep이 권장되지만, 여기서는 간단히 blocking sleep 사용해도 무방 (thread::sleep은 전체 스레드를 멈추므로 주의, tokio::time::sleep이 좋음)
-            // 여기서는 tokio sleep을 사용하는 것이 좋습니다.
-             tokio::time::sleep(Duration::from_millis(100)).await;
-        }
+
+        // 너무 빠른 요청 방지. async 함수이므로 tokio sleep을 사용해 워커 스레드를 블로킹하지 않는다.
+        // 페이지가 많을수록(>5) 조금 더 길게 쉬어 서버 부하/차단을 피한다.
+        let delay_ms = if total_pages > 5 { 200 } else { 100 };
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
     }
 
     Ok(holdings)
