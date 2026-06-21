@@ -306,6 +306,210 @@ pub async fn remove_user_etf(
     Ok(())
 }
 
+// ── 데이터 백업/복원 ──────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct EtfBackupRow {
+    pub code: String,
+    pub manager_id: String,
+    pub name: String,
+    pub etf_id: String,
+    pub is_favorite: bool,
+    pub is_enabled: bool,
+    pub is_user_added: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct HoldingBackupRow {
+    pub date: String,
+    pub etf_code: String,
+    pub stock_code: String,
+    pub stock_name: Option<String>,
+    pub weight: Option<f64>,
+    pub quantity: Option<i64>,
+    pub price: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BackupFile {
+    pub format: String,        // "activeetfs-backup"
+    pub version: u32,          // 스키마 버전
+    pub app_version: String,
+    pub exported_at: String,
+    pub etfs: Vec<EtfBackupRow>,
+    pub holdings: Vec<HoldingBackupRow>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupResult {
+    pub etf_count: usize,
+    pub holding_count: usize,
+    pub message: String,
+}
+
+// 전체 DB(사용자 ETF 상태 + 보유 종목)를 gzip 압축 JSON으로 내보낸다.
+#[tauri::command]
+pub async fn export_database(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<BackupResult, String> {
+    use std::io::Write;
+    use flate2::{write::GzEncoder, Compression};
+
+    let etfs = sqlx::query_as::<_, EtfBackupRow>(
+        "SELECT code, manager_id, name, COALESCE(etf_id,'') as etf_id, \
+         COALESCE(is_favorite,0) as is_favorite, COALESCE(is_enabled,1) as is_enabled, \
+         COALESCE(is_user_added,0) as is_user_added FROM etfs",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let holdings = sqlx::query_as::<_, HoldingBackupRow>(
+        "SELECT date, etf_code, stock_code, stock_name, weight, quantity, price FROM holdings",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let etf_count = etfs.len();
+    let holding_count = holdings.len();
+
+    let backup = BackupFile {
+        format: "activeetfs-backup".to_string(),
+        version: 1,
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        etfs,
+        holdings,
+    };
+
+    let json = serde_json::to_vec(&backup).map_err(|e| e.to_string())?;
+
+    // .gz 확장자면 gzip 압축, 아니면 평문 JSON으로 저장.
+    let bytes = if path.to_lowercase().ends_with(".json") {
+        json
+    } else {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&json).map_err(|e| e.to_string())?;
+        encoder.finish().map_err(|e| e.to_string())?
+    };
+
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(BackupResult {
+        etf_count,
+        holding_count,
+        message: format!("ETF {}개, 보유 데이터 {}건을 내보냈습니다.", etf_count, holding_count),
+    })
+}
+
+// 백업 파일을 읽어 복원한다.
+// mode: "overwrite" = 가져온 데이터로 덮어쓰기, "fill" = 비어 있는 (ETF, 날짜)만 채우기
+#[tauri::command]
+pub async fn import_database(
+    state: tauri::State<'_, AppState>,
+    path: String,
+    mode: String,
+) -> Result<BackupResult, String> {
+    use std::io::Read;
+    use flate2::read::GzDecoder;
+
+    let raw = std::fs::read(&path).map_err(|e| e.to_string())?;
+
+    // gzip 매직바이트(0x1f 0x8b)면 압축 해제, 아니면 평문 JSON으로 간주.
+    let json_bytes = if raw.len() >= 2 && raw[0] == 0x1f && raw[1] == 0x8b {
+        let mut decoder = GzDecoder::new(&raw[..]);
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).map_err(|e| format!("압축 해제 실패: {}", e))?;
+        buf
+    } else {
+        raw
+    };
+
+    let backup: BackupFile = serde_json::from_slice(&json_bytes)
+        .map_err(|e| format!("백업 파일 형식이 올바르지 않습니다: {}", e))?;
+    if backup.format != "activeetfs-backup" {
+        return Err("Active ETFs 백업 파일이 아닙니다.".to_string());
+    }
+
+    let overwrite = mode == "overwrite";
+
+    // fill 모드: 현재 DB에 이미 데이터가 있는 (etf_code, date) 조합은 건드리지 않는다.
+    use std::collections::HashSet;
+    let mut existing_pairs: HashSet<(String, String)> = HashSet::new();
+    if !overwrite {
+        use sqlx::Row;
+        let rows = sqlx::query("SELECT DISTINCT etf_code, date FROM holdings")
+            .fetch_all(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        for r in rows {
+            existing_pairs.insert((r.get::<String, _>("etf_code"), r.get::<String, _>("date")));
+        }
+    }
+
+    let mut tx = state.db.begin().await.map_err(|e| e.to_string())?;
+
+    // 1) ETF 메타데이터 복원
+    let mut etf_count = 0usize;
+    for e in &backup.etfs {
+        if overwrite {
+            // 덮어쓰기: 플래그까지 갱신(카탈로그 ETF 포함). 사용자 추가 ETF는 새로 삽입.
+            sqlx::query(
+                "INSERT INTO etfs (code, manager_id, name, etf_id, is_favorite, is_enabled, is_user_added) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?) \
+                 ON CONFLICT(code) DO UPDATE SET manager_id=excluded.manager_id, name=excluded.name, \
+                 etf_id=excluded.etf_id, is_favorite=excluded.is_favorite, is_enabled=excluded.is_enabled, \
+                 is_user_added=excluded.is_user_added",
+            )
+            .bind(&e.code).bind(&e.manager_id).bind(&e.name).bind(&e.etf_id)
+            .bind(e.is_favorite).bind(e.is_enabled).bind(e.is_user_added)
+            .execute(&mut *tx).await.map_err(|err| err.to_string())?;
+            etf_count += 1;
+        } else {
+            // 채우기: 존재하지 않는 ETF만 삽입(기존 플래그/이름은 보존).
+            let res = sqlx::query(
+                "INSERT OR IGNORE INTO etfs (code, manager_id, name, etf_id, is_favorite, is_enabled, is_user_added) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&e.code).bind(&e.manager_id).bind(&e.name).bind(&e.etf_id)
+            .bind(e.is_favorite).bind(e.is_enabled).bind(e.is_user_added)
+            .execute(&mut *tx).await.map_err(|err| err.to_string())?;
+            etf_count += res.rows_affected() as usize;
+        }
+    }
+
+    // 2) 보유 종목 복원
+    let mut holding_count = 0usize;
+    for h in &backup.holdings {
+        if !overwrite && existing_pairs.contains(&(h.etf_code.clone(), h.date.clone())) {
+            continue; // 이미 데이터가 있는 (ETF, 날짜)는 건너뜀
+        }
+        sqlx::query(
+            "INSERT OR REPLACE INTO holdings (date, etf_code, stock_code, stock_name, weight, quantity, price) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&h.date).bind(&h.etf_code).bind(&h.stock_code).bind(&h.stock_name)
+        .bind(h.weight).bind(h.quantity).bind(h.price)
+        .execute(&mut *tx).await.map_err(|err| err.to_string())?;
+        holding_count += 1;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    let mode_label = if overwrite { "덮어쓰기" } else { "빈 날짜 채우기" };
+    Ok(BackupResult {
+        etf_count,
+        holding_count,
+        message: format!(
+            "복원 완료({}): ETF {}개, 보유 데이터 {}건 반영.",
+            mode_label, etf_count, holding_count
+        ),
+    })
+}
+
 #[tauri::command]
 pub fn get_changelog() -> String {
     include_str!("../../../CHANGELOG.md").to_string()

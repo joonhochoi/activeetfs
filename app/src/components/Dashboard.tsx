@@ -98,6 +98,11 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
     useEffect(() => {
         fetchUserEtfs().then(setUserEtfs);
+        // ETF 추가/삭제 시(BroadcastChannel) 사용자 추가 목록을 즉시 갱신해야
+        // 방금 추가한 ETF도 이름·운용사·수집 정보가 바로 해석된다(재시작 불필요).
+        const ch = new BroadcastChannel('etf-settings');
+        ch.onmessage = () => { fetchUserEtfs().then(setUserEtfs); };
+        return () => ch.close();
     }, []);
 
     const addLog = (message: string, type: 'info' | 'success' | 'error' | 'analysis' = 'info') => {

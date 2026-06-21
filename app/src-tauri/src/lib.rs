@@ -38,7 +38,9 @@ pub fn run(context: tauri::Context) {
             commands::save_etf_enabled_list,
             commands::add_etf_from_url,
             commands::get_user_added_etfs,
-            commands::remove_user_etf
+            commands::remove_user_etf,
+            commands::export_database,
+            commands::import_database
         ])
         .run(context)
         .expect("error while running tauri application");
