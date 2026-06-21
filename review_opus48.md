@@ -169,14 +169,14 @@
 - ✅ **로그 영속화** — Dashboard 로그를 localStorage에 보관(최근 300개)해 ETF 전환·앱 재시작에도 유지. 전환 시 비우지 않고 `──── ETF명 ────` 구분선만 남김. (Clear Logs로 수동 삭제 가능)
 - ✅ **(추가) Select ETFs 데이터 날짜 표시** — `get_etf_enabled_list`에 `MAX(date)`(lastDate) 추가, 창에서 `20일 (26-03-17)`처럼 마지막 데이터 날짜를 함께 표시.
 - ⬜ **TIGER 당일 데이터 부재 안내**가 헤더 텍스트로만 있음([UpdateTodayWindow.tsx:303](app/src/components/UpdateTodayWindow.tsx#L303)). provider별 "T-1만 제공" 같은 메타를 카탈로그에 두고 UI에서 자동 처리하면 깔끔.
-- ⬜ **즐겨찾기/사용자추가 ETF 삭제 기능 부재** — 추가는 되는데(`add_etf_from_url`) 제거 커맨드가 없다. 잘못 추가하면 DB를 직접 만져야 함.
+- ✅ **사용자추가 ETF 삭제 기능** — Select ETFs 창에 사용자 추가 ETF 전용 `삭제` 버튼 + 확인 모달 추가(섹션 6-2 참고). (즐겨찾기 자체 삭제는 별도 토글이라 해당 없음)
 
 ---
 
 ## 6. 추가하면 좋을 기능 제안
 
-1. **사용자 추가 ETF 업데이트 지원 (필수, 1-1의 해결)** — 모든 일괄·개별 업데이트가 카탈로그+DB(`is_user_added`)를 합쳐 동작하도록. 이게 빠지면 Add New ETF 기능 자체가 의미 없음.
-2. **사용자 추가 ETF 삭제 커맨드** (`remove_user_etf(code)`), 사이드바 컨텍스트 메뉴.
+1. ✅ **사용자 추가 ETF 업데이트 지원 (1-1에서 해결 완료)** — Dashboard 개별 Update·UpdateAll·UpdateToday가 모두 `getAllEtfTargets()`(카탈로그+DB)를 사용. 더불어 Select ETFs 창에도 사용자 추가 ETF를 노출(`추가` 배지)해 활성/비활성 토글까지 가능하도록 보강.
+2. ✅ **사용자 추가 ETF 삭제** — 백엔드 `remove_user_etf(code)` 커맨드 추가(`is_user_added=1` 가드, 보유 데이터까지 트랜잭션 삭제). Select ETFs 창에서 사용자 추가 ETF 행에만 `삭제` 버튼 노출, 클릭 시 확인 모달(데이터 동반 삭제 경고) 후 삭제하고 BroadcastChannel로 사이드바 갱신.
 3. **금액/평가액 기반 분석** — `quantity`·`price`가 이미 저장되므로, 비중 외에 보유 금액 추이, 매수/매도 추정(수량 변화)을 보여줄 수 있다. (PLUS는 price 0이라 별도 처리.)
 4. **CSV/Excel 내보내기** — 특정 ETF의 기간별 보유/비중을 내보내기. 투자자 수요가 큼.
 5. **여러 ETF 교차 비교** — "이 종목을 담고 있는 모든 ETF" 역조회. `holdings`에 stock_code 인덱스만 있으면 쉽게 가능하고, 액티브 ETF 추종자에게 매우 유용.

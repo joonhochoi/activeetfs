@@ -276,6 +276,37 @@ pub async fn get_user_added_etfs(
 }
 
 #[tauri::command]
+pub async fn remove_user_etf(
+    state: tauri::State<'_, AppState>,
+    code: String,
+) -> Result<(), String> {
+    // 안전장치: 사용자 추가 ETF(is_user_added = 1)만 삭제 허용. 카탈로그 ETF는 보호한다.
+    let mut tx = state.db.begin().await.map_err(|e| e.to_string())?;
+
+    // 보유 종목 데이터 먼저 정리(고아 레코드 방지)
+    sqlx::query("DELETE FROM holdings WHERE etf_code = ?")
+        .bind(&code)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let result = sqlx::query("DELETE FROM etfs WHERE code = ? AND is_user_added = 1")
+        .bind(&code)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if result.rows_affected() == 0 {
+        // 사용자 추가 ETF가 아니거나 존재하지 않음 → 롤백
+        tx.rollback().await.map_err(|e| e.to_string())?;
+        return Err("삭제할 수 없는 ETF입니다. (사용자 추가 ETF만 삭제 가능)".to_string());
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_changelog() -> String {
     include_str!("../../../CHANGELOG.md").to_string()
 }
