@@ -8,9 +8,10 @@
 
 > **처리 현황 (2026-06-21 업데이트)**
 > - 섹션 1: 1-1·1-2·1-3·1-5·1-6·1-7 **반영 완료**, 1-4 **패스(보류)**.
-> - 섹션 2: 2-1·2-2·2-4·2-5 **반영 완료**(2-5는 sanity check까지, 헤더 매핑 리팩터링은 잔여), 2-3은 조치 불필요(이미 안전).
+> - 섹션 2: 2-1·2-2·2-4·2-5 **반영 완료**(2-5는 sanity check + RISE 헤더 매핑까지), 2-3은 조치 불필요(이미 안전).
 > - 섹션 3: 3-1·3-2·3-3 **반영 완료**.
-> - 검증: 프론트 `tsc`/`vite build`, 백엔드 `cargo check` 통과 + 개발 모드 기동 스모크 테스트(패닉 0건, WAL 파일 생성, CSP 하 정상 렌더) 확인.
+> - 섹션 4: 4-1·4-3·4-5·4-6·4-7·4-8 **반영 완료**, 4-2·4-4 **부분 완료**(잔여는 후속). 
+> - 검증: 프론트 `tsc`/`vite build`, 백엔드 `cargo check` 통과 + 개발 모드 기동 스모크 테스트(패닉 0건, WAL 파일 생성, shell 의존성 제거로 빌드 크레이트 527→522, CSP 하 정상 렌더) 확인.
 
 ---
 
@@ -89,7 +90,8 @@
 - KoAct WebView 외 일반 reqwest 경로([fetch.rs](app/src-tauri/src/fetch.rs))는 1회 실패 시 그냥 에러. 운용사 사이트는 일시적 5xx/타임아웃이 잦다. 지수 백오프 재시도(2~3회)를 넣으면 일괄 업데이트 성공률이 올라간다.
 
 ### 2-5. 🟡 스크래퍼 파싱이 사이트 구조에 강하게 결합
-> ✅ **처리(부분) 완료** — `check_weight_sanity()`를 추가해 수집 결과의 비중 합계가 정상 범위(50~150%)를 벗어나면 `get_etf_holdings` 응답 메시지에 ⚠️ 경고를 덧붙임(컬럼 밀림 등 조용한 오파싱을 드러냄). 헤더명 기반 매핑으로의 전환은 별도 리팩터링 과제로 남김.
+> ✅ **처리 완료** — (1) `check_weight_sanity()`로 비중 합계가 정상 범위(50~150%)를 벗어나면 `get_etf_holdings` 응답에 ⚠️ 경고. (2) **RISE는 헤더명 기반 컬럼 매핑(+위치 fallback)으로 전환** — "종목명"이 포함된 헤더행을 찾아 종목명/코드/수량/비중/평가금액 컬럼 인덱스를 라벨로 해석하고, 헤더가 없거나 라벨을 못 찾으면 기존 고정 인덱스를 그대로 사용해 회귀 위험 0. 
+> 참고: koact/kodex/plus/ace는 이미 JSON 필드명 기반이라 동일 수준으로 견고(대상 아님), TIME/TIGER는 헤더행이 fetch fragment에 안 실릴 수 있어 sanity check로 커버하고 헤더 매핑은 보류.
 
 - RISE([fetch.rs:361-393](app/src-tauri/src/fetch.rs#L361-L393)), TIGER, TIME 모두 컬럼 인덱스(`cells[2]`, `cells[4]`...)에 의존한다. 운용사가 표 구조를 바꾸면 조용히 잘못된 컬럼을 파싱(수량↔비중 뒤바뀜 등)할 수 있다. 헤더명 기반 매핑이나, 파싱 후 `weight` 합계가 비정상(예: 0 또는 >100*1.5)이면 경고하는 sanity check가 있으면 좋다.
 
@@ -118,28 +120,44 @@
 ## 4. 코드 품질 / 유지보수
 
 ### 4-1. 데드 코드 정리
+> ✅ **처리 완료** — 1-3에서 커맨드를 제거한 데 이어, 사용처가 사라진 **shell 플러그인 등록(lib.rs)·`shell:default` 권한(capabilities)·`tauri-plugin-shell` 의존성(Cargo.toml)** 을 모두 제거(빌드 크레이트 527→522 확인, 공격 표면 축소). `types.ts`의 사이드카 잔재(`sidecar_exe`/`args`)는 4-4에서 정리.
+
 - `greet`([lib.rs:2](app/src-tauri/src/lib.rs#L2)), `run_sidecar`([commands.rs:17](app/src-tauri/src/commands.rs#L17), 더 이상 사이드카 없음), `analyze_changes`/`analyze_trends`(미사용). `types.ts`의 `ManagerInfo.sidecar_exe`, `EtfInfo.args`도 사이드카 시절 잔재.
 - 제거하면 capabilities의 `shell:default` 권한도 재검토 가능(현재 `run_sidecar`만 shell을 씀 → 제거 시 권한 축소로 공격 표면 감소).
 
 ### 4-2. 편입/편출 분석 로직이 3곳에 중복
+> ✅ **처리(부분) 완료** — 백엔드 `analyze_changes`는 1-3에서 제거됨. 두-시점 단순 diff를 `utils/holdings.ts`의 `diffByStockCode()`로 추출해 `UpdateTodayWindow`에 적용. `Dashboard.handleAnalyze`는 기간 내 첫 등장/마지막 잔존일까지 계산하는 시계열 로직이라 성격이 달라 자체 구현 유지(이미 stock_code 기준).
+
 - `Dashboard.handleAnalyze`, `UpdateTodayWindow`, 백엔드 `analyze_changes`가 각각 비슷한 diff를 구현. 공통 유틸(이상적으로는 백엔드 커맨드)로 단일화하면 1-2의 정합성 문제도 자연히 해결된다.
 
 ### 4-3. `toLocalDateString` 중복 정의
+> ✅ **처리 완료** — `src/utils/date.ts`로 추출하고 Dashboard·UpdateAllWindow·UpdateTodayWindow·HoldingsTable의 중복 정의/인라인 구현을 모두 import로 통일.
+
 - Dashboard, UpdateAllWindow, UpdateTodayWindow에 동일 함수가 각각 복붙되어 있다. `src/utils/date.ts`로 추출 권장.
 
 ### 4-4. 타입 안정성 약화 (`as any` 다발)
+> ✅ **처리(부분) 완료** — `types.ts`의 `EtfInfo`/`ManagerInfo`/`Config`를 실제 JSON(`type`/`view_url`/`id` 포함, 사이드카 잔재 `sidecar_exe`/`args` 제거)에 맞게 재정의하고 죽은 `AnalysisResult` 삭제. `utils/etfs.ts`는 JSON을 `Config`로 단언해 내부 `as any[]`/`as any`를 모두 제거. (Sidebar/SelectEtfsWindow에 남은 `as any[]`는 동작에 영향 없어 후속 정리 대상.)
+
 - `(manager as any).type`, `(etf as any).id`, `(manager.etfs as any[])` 등이 곳곳에 있다([Dashboard.tsx:348-349](app/src/components/Dashboard.tsx#L348-L349), Sidebar, SelectEtfsWindow 등). `activeetfinfos.json` 구조에 맞는 정확한 타입(`types.ts`의 `ManagerInfo`/`EtfInfo`를 `type`, `view_url`, `id` 포함하도록 갱신)을 정의하면 1-1 같은 누락을 컴파일 단계에서 잡을 수 있다. 현재 `types.ts`는 실제 JSON과 필드가 어긋나 있다(`sidecar_exe`, `args`는 없고 `type`, `view_url`, `id`는 타입에 없음).
 
 ### 4-5. 보조 창 ↔ 메인 창 통신 채널 혼재
+> ✅ **처리 완료** — 리스너가 없던 죽은 Tauri 이벤트 `app.emit("etf-settings-saved")`와 그에 딸린 `app: AppHandle` 파라미터·`Emitter` import를 `save_etf_enabled_list`에서 제거. 설정 변경 알림은 실제로 동작하는 `BroadcastChannel('etf-settings')` 경로로 일원화.
+
 - 설정 저장은 `app.emit("etf-settings-saved")`(Tauri 이벤트, [commands.rs:313](app/src-tauri/src/commands.rs#L313))로 보내는데, Sidebar는 그걸 안 듣고 `BroadcastChannel('etf-settings')`([Sidebar.tsx:37](app/src/components/Sidebar.tsx#L37))로 듣는다. SelectEtfsWindow는 저장 후 BroadcastChannel로 직접 쏜다([SelectEtfsWindow.tsx:108](app/src/components/SelectEtfsWindow.tsx#L108)). 즉 Tauri 이벤트는 사실상 미사용. 한쪽(BroadcastChannel 또는 Tauri 이벤트)으로 통일하면 혼선이 준다. (BroadcastChannel은 같은 origin의 webview 간만 동작하므로 현 구조에선 잘 맞는 편.)
 
 ### 4-6. 일괄 업데이트의 고정 지연(`setTimeout 400ms`)
+> ✅ **처리 완료** — `utils/etfs.ts`에 `interEtfDelayMs(provider)` 추가(koact/kodex=400ms, 그 외=120ms). UpdateAllWindow·UpdateTodayWindow의 ETF 간 고정 400ms 대기를 provider별 차등 대기로 교체해 일반 API 운용사의 전체 소요 시간 단축.
+
 - [UpdateAllWindow.tsx:116](app/src/components/UpdateAllWindow.tsx#L116), [UpdateTodayWindow.tsx:269](app/src/components/UpdateTodayWindow.tsx#L269) — 모든 ETF 사이에 400ms 대기. ETF가 60개면 순수 대기만 24초+. Cloudflare 안정성 목적이면 WebView를 쓰는 koact/kodex에만 적용하고, 일반 API 운용사는 줄여도 된다.
 
 ### 4-7. README / 배지 불일치
+> ✅ **처리 완료** — 직전 커밋에서 README 현행화(React 19, Vite 7, 7개 운용사, 실제 스택 반영). 배지도 React 19로 정정됨.
+
 - README 배지가 `React-18`인데 실제 `package.json`은 React 19.1([README.md:6](README.md#L6) vs [package.json:23](app/package.json#L23)). "5개 운용사"류 서술도 7개로 갱신 필요. CLAUDE.md는 이번에 7개로 갱신함.
 
 ### 4-8. `print`/로그 파일 무한 append
+> ✅ **처리 완료** — `main.rs`에서 앱 시작 시 `debug_startup.log` 크기를 확인해 1MB를 넘으면 비우도록(간단 회전) 처리. 무한 증가 방지.
+
 - [main.rs:20-21](app/src-tauri/src/main.rs#L20-L21) — `debug_startup.log`에 매 실행 append만 하고 회전(rotation)이 없다. 장기적으로 무한 증가. 크기 제한 또는 실행 시 truncate 고려.
 
 ---
@@ -180,5 +198,6 @@
 | 6 | 스크래퍼 재시도 + sanity check(2-4, 2-5) | 일괄 수집 신뢰성 | ✅ 완료(헤더 매핑 잔여) |
 | 7 | analyze 날짜 스냅 / PLUS price 문서화 / sleep 정리(1-5,1-6,1-7) | UX·정합성 | ✅ 완료 |
 | 8 | CSP 활성화 / tooltip 이스케이프 / 차트 인덱싱(2-1, 2-2, 3-3) | 보안·성능 | ✅ 완료 |
+| 9 | RISE 헤더 매핑(2-5) + 코드 품질 정리(4-1~4-8) | 견고성·유지보수성 | ✅ 완료(4-2·4-4 일부 잔여) |
 
 세부 위치는 각 항목의 파일:라인 링크를 참고. 추가로 깊게 보고 싶은 항목이 있으면 알려주세요.

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { Holding } from '../types';
+import { toLocalDateString } from '../utils/date';
 
 interface HoldingsTableProps {
     date: string;
@@ -44,10 +45,7 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
     const handleCompareClick = () => {
         if (selectedCompareDate && onCompare) {
-            const year = selectedCompareDate.getFullYear();
-            const month = String(selectedCompareDate.getMonth() + 1).padStart(2, '0');
-            const day = String(selectedCompareDate.getDate()).padStart(2, '0');
-            onCompare(`${year}-${month}-${day}`);
+            onCompare(toLocalDateString(selectedCompareDate));
         }
     };
 
@@ -179,13 +177,9 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 onChange={(date: Date | null) => setSelectedCompareDate(date)}
                                 dateFormat="yyyy-MM-dd"
                                 placeholderText="날짜 선택"
-                                dayClassName={(date: Date) => {
-                                    const year = date.getFullYear();
-                                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                                    const day = String(date.getDate()).padStart(2, '0');
-                                    const dateStr = `${year}-${month}-${day}`;
-                                    return availableDates.has(dateStr) ? "day-has-data" : "";
-                                }}
+                                dayClassName={(date: Date) =>
+                                    availableDates.has(toLocalDateString(date)) ? "day-has-data" : ""
+                                }
                                 popperContainer={({ children }) => createPortal(children, document.body)}
                                 popperPlacement="bottom-end"
                             />

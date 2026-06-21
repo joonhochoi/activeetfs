@@ -15,7 +15,15 @@ fn main() {
     let log_dir = std::path::PathBuf::from(app_data).join("com.juno.activeetfs");
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join("debug_startup.log");
-    
+
+    // 로그 회전: 파일이 1MB를 넘으면 비워서 무한 증가를 막는다.
+    const MAX_LOG_BYTES: u64 = 1024 * 1024;
+    if let Ok(meta) = std::fs::metadata(&log_path) {
+        if meta.len() > MAX_LOG_BYTES {
+            let _ = std::fs::write(&log_path, b"");
+        }
+    }
+
     // Log app start
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
         let _ = writeln!(f, "[APP START] Executable launched at {:?}", std::time::SystemTime::now());

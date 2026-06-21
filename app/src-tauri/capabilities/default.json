@@ -18,7 +18,6 @@
     "opener:default",
     "updater:default",
     "dialog:default",
-    "process:default",
-    "shell:default"
+    "process:default"
   ]
 }

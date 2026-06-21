@@ -1,6 +1,5 @@
 use crate::AppState;
 use serde::{Deserialize, Serialize};
-use tauri::Emitter;
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Holding {
@@ -182,7 +181,6 @@ pub async fn get_etf_enabled_list(
 
 #[tauri::command]
 pub async fn save_etf_enabled_list(
-    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     settings: Vec<EtfToggle>,
 ) -> Result<(), String> {
@@ -194,7 +192,7 @@ pub async fn save_etf_enabled_list(
             .await
             .map_err(|e| e.to_string())?;
     }
-    app.emit("etf-settings-saved", "").map_err(|e| e.to_string())?;
+    // 변경 알림은 프론트엔드의 BroadcastChannel('etf-settings')로 처리한다(SelectEtfsWindow → Sidebar).
     Ok(())
 }
 

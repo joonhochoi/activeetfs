@@ -8,6 +8,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { Holding } from '../types';
 import HoldingsTable from './HoldingsTable';
 import { resolveEtf, fetchUserEtfs, UserEtf } from '../utils/etfs';
+import { toLocalDateString } from '../utils/date';
 
 interface DashboardProps {
     etfCode: string;
@@ -28,13 +29,6 @@ interface LogItem {
 }
 
 const COLOR_PALETTE = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
-
-const toLocalDateString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
 
 // ECharts tooltip은 innerHTML 문자열로 렌더링되므로, 외부(운용사 응답)에서 온 종목명 등을
 // 그대로 삽입하면 HTML/스크립트 주입 위험이 있다. 삽입 전 반드시 이스케이프한다.

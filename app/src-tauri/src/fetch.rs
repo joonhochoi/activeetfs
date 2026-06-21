@@ -407,31 +407,58 @@ async fn fetch_rise(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
     let tr_selector = Selector::parse("tr").unwrap();
     let td_selector = Selector::parse("th, td").unwrap();
 
+    // ── 헤더명 기반 컬럼 매핑 (+ 위치 기반 fallback) ──────────────────────────
+    // RISE 응답은 보통 "종목명"을 포함한 헤더행을 동봉한다. 헤더가 있으면 라벨로
+    // 컬럼 인덱스를 찾고, 헤더가 없거나 특정 라벨을 못 찾으면 기존 고정 인덱스를
+    // 사용한다. 이렇게 하면 운용사가 컬럼 순서를 바꿔도 견고하면서 회귀(regression)도 없다.
+    // 기본(고정) 인덱스: 0:No 1:Name 2:Code 3:Qty 4:Weight 5:Price
+    let (mut i_name, mut i_code, mut i_qty, mut i_weight, mut i_price) = (1usize, 2usize, 3usize, 4usize, 5usize);
+
+    let header_labels: Option<Vec<String>> = document
+        .select(&tr_selector)
+        .map(|tr| {
+            tr.select(&td_selector)
+                .map(|c| c.text().collect::<String>().trim().to_string())
+                .collect::<Vec<_>>()
+        })
+        .find(|cells| cells.iter().any(|c| c.contains("종목명")));
+
+    if let Some(ref labels) = header_labels {
+        let find_idx = |keywords: &[&str]| -> Option<usize> {
+            labels.iter().position(|l| keywords.iter().any(|k| l.contains(k)))
+        };
+        if let Some(i) = find_idx(&["종목명"]) { i_name = i; }
+        if let Some(i) = find_idx(&["종목코드", "코드"]) { i_code = i; }
+        if let Some(i) = find_idx(&["수량", "주식수", "계약수"]) { i_qty = i; }
+        if let Some(i) = find_idx(&["비중", "비율"]) { i_weight = i; }
+        if let Some(i) = find_idx(&["평가금액", "보유금액", "금액", "평가"]) { i_price = i; }
+    }
+
+    let max_idx = [i_name, i_code, i_qty, i_weight, i_price].into_iter().max().unwrap_or(5);
+
     let mut holdings = Vec::new();
 
     // 각 행(tr) 순회
     for element in document.select(&tr_selector) {
         let cells: Vec<_> = element.select(&td_selector).collect();
-        if cells.len() < 6 {
-            continue;
+        if cells.len() <= max_idx {
+            continue; // 데이터 행이 아니거나 컬럼 수가 부족한 행은 건너뛴다
         }
 
-        // 셀 데이터 추출 (Index는 Go 코드 기준)
-        // 0: No, 1: Name, 2: Code, 3: Qty, 4: Weight, 5: Price
-        let name = cells[1].text().collect::<Vec<_>>().join("").trim().to_string();
-        let stock_code = cells[2].text().collect::<Vec<_>>().join("").trim().to_string();
+        let get = |idx: usize| -> String {
+            cells.get(idx).map(|c| c.text().collect::<String>().trim().to_string()).unwrap_or_default()
+        };
+
+        let name = get(i_name);
+        let stock_code = get(i_code);
 
         if name == "종목명" || stock_code.is_empty() {
             continue; // 헤더나 빈 줄 건너뛰기
         }
 
-        let qty_str = cells[3].text().collect::<Vec<_>>().join("").replace(",", "");
-        let weight_str = cells[4].text().collect::<Vec<_>>().join("");
-        let price_str = cells[5].text().collect::<Vec<_>>().join("").replace(",", "");
-
-        let quantity = qty_str.trim().parse::<i64>().unwrap_or(0);
-        let weight = weight_str.trim().parse::<f64>().unwrap_or(0.0);
-        let price = price_str.trim().parse::<f64>().unwrap_or(0.0);
+        let quantity = get(i_qty).replace(",", "").trim().parse::<i64>().unwrap_or(0);
+        let weight = get(i_weight).replace(",", "").replace("%", "").trim().parse::<f64>().unwrap_or(0.0);
+        let price = get(i_price).replace(",", "").trim().parse::<f64>().unwrap_or(0.0);
 
         holdings.push(Holding {
             date: date.to_string(),

@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
-import { getAllEtfTargets } from '../utils/etfs';
+import { getAllEtfTargets, interEtfDelayMs } from '../utils/etfs';
+import { toLocalDateString } from '../utils/date';
+import { diffByStockCode } from '../utils/holdings';
 
 type EtfStatus = 'waiting' | 'has_data' | 'updating' | 'pass' | 'success' | 'error';
 
@@ -33,13 +35,6 @@ interface HoldingItem {
     quantity: number;
     price: number;
 }
-
-const toLocalDateString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
 
 const STATUS_CONFIG: Record<EtfStatus, { label: string; color: string; bg: string }> = {
     waiting: { label: '대기', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
@@ -240,15 +235,9 @@ const UpdateTodayWindow: React.FC = () => {
                         invoke<HoldingItem[]>('get_holdings_by_date', { etfCode: code, date: compareDate }),
                     ]);
 
-                    const prevCodes = new Set(prevHoldings.map(h => h.stock_code));
-                    const todayCodes = new Set(todayHoldings.map(h => h.stock_code));
-
-                    inStocks = todayHoldings
-                        .filter(h => !prevCodes.has(h.stock_code))
-                        .map(h => ({ name: h.name, weight: h.weight }));
-                    outStocks = prevHoldings
-                        .filter(h => !todayCodes.has(h.stock_code))
-                        .map(h => ({ name: h.name, weight: h.weight }));
+                    const { added, removed } = diffByStockCode(prevHoldings, todayHoldings);
+                    inStocks = added.map(h => ({ name: h.name, weight: h.weight }));
+                    outStocks = removed.map(h => ({ name: h.name, weight: h.weight }));
                 }
 
                 setRows(prev => {
@@ -264,7 +253,8 @@ const UpdateTodayWindow: React.FC = () => {
                 });
             }
 
-            await new Promise(r => setTimeout(r, 400));
+            // ETF 간 대기: WebView 기반(koact/kodex)만 길게, 일반 API는 짧게
+            await new Promise(r => setTimeout(r, interEtfDelayMs(row.provider)));
         }
 
         setIsUpdating(false);

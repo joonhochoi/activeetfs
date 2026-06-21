@@ -4,7 +4,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
-import { getAllEtfTargets } from '../utils/etfs';
+import { getAllEtfTargets, interEtfDelayMs } from '../utils/etfs';
+import { toLocalDateString } from '../utils/date';
 
 interface LogItem {
     time: string;
@@ -29,13 +30,6 @@ const UpdateAllWindow: React.FC = () => {
     const addLog = (message: string, status: 'pending' | 'success' | 'error' = 'pending') => {
         const time = new Date().toLocaleTimeString();
         setLogs(prev => [...prev, { time, message, status }]);
-    };
-
-    const toLocalDateString = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
     };
 
     const toggleDate = (date: Date) => {
@@ -106,8 +100,8 @@ const UpdateAllWindow: React.FC = () => {
                     console.error(`Update failed for ${target.name}:`, e);
                 }
 
-                // 모든 운용사에 대해 대기 시간을 조금 늘려 Cloudflare 세션 안정성 확보
-                await new Promise(r => setTimeout(r, 400));
+                // ETF 간 대기: WebView 기반(koact/kodex)만 길게, 일반 API는 짧게
+                await new Promise(r => setTimeout(r, interEtfDelayMs(target.provider)));
             }
 
             addLog(`━━━ Date ${targetDateStr} complete ━━━`, 'success');
