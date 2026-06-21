@@ -36,6 +36,16 @@ const toLocalDateString = (date: Date) => {
     return `${year}-${month}-${day}`;
 };
 
+// ECharts tooltip은 innerHTML 문자열로 렌더링되므로, 외부(운용사 응답)에서 온 종목명 등을
+// 그대로 삽입하면 HTML/스크립트 주입 위험이 있다. 삽입 전 반드시 이스케이프한다.
+const escapeHtml = (s: string): string =>
+    String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
 const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, favorites, onToggleFavorite }) => {
     const [holdings, setHoldings] = useState<Holding[]>([]);
     const [loading, setLoading] = useState(false);
@@ -83,6 +93,18 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
 
     // --- LOGIC MOVED UP FOR DEPENDENCY RESOLUTION ---
 
+    // 날짜 → (종목명 → 비중) 인덱스. 차트 계산에서 holdings.find(...)를 매번 도는 대신
+    // 이 맵으로 O(1) 조회하여 종목 수 × 날짜 수의 곱에 비례하던 비용을 줄인다.
+    const holdingsByDateName = useMemo(() => {
+        const m = new Map<string, Map<string, number>>();
+        holdings.forEach(h => {
+            let inner = m.get(h.date);
+            if (!inner) { inner = new Map(); m.set(h.date, inner); }
+            inner.set(h.name, h.weight);
+        });
+        return m;
+    }, [holdings]);
+
     // Series Names
     const seriesNames = useMemo(() => {
         if (!holdings.length) return [];
@@ -98,9 +120,10 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         // Create a map of Stock -> Max Weight in this period for sorting
         const stockMaxWeights = new Map<string, number>();
 
+        const relevantDatesSet = new Set(relevantDates);
         holdings.forEach(h => {
             // Only consider holdings within the relevant date range
-            if (relevantDates.includes(h.date)) {
+            if (relevantDatesSet.has(h.date)) {
                 const currentMax = stockMaxWeights.get(h.name) || 0;
                 if (h.weight > currentMax) {
                     stockMaxWeights.set(h.name, h.weight);
@@ -501,9 +524,11 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             return true;
         });
 
+        const relevantDatesSet = new Set(relevantDates);
+        const seriesNamesSet = new Set(seriesNames);
         const visibleWeights: number[] = [];
         holdings.forEach(h => {
-            if (relevantDates.includes(h.date) && seriesNames.includes(h.name) && !hiddenSeries.has(h.name)) {
+            if (relevantDatesSet.has(h.date) && seriesNamesSet.has(h.name) && !hiddenSeries.has(h.name)) {
                 visibleWeights.push(h.weight);
             }
         });
@@ -538,15 +563,17 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         });
 
         const titleText = `Top ${topN === 'all' ? 'All' : topN} : ${relevantDates[0] || ''} ~ ${relevantDates[relevantDates.length - 1] || ''}`;
+        const seriesNamesSet = new Set(seriesNames);
 
         let hasSplit = false;
         let topMin = 0;
         let bottomMax = 0;
 
         if (isExpanded) {
+            const relevantDatesSet = new Set(relevantDates);
             const visibleWeights: number[] = [];
             holdings.forEach(h => {
-                if (relevantDates.includes(h.date) && seriesNames.includes(h.name) && !hiddenSeries.has(h.name)) {
+                if (relevantDatesSet.has(h.date) && seriesNamesSet.has(h.name) && !hiddenSeries.has(h.name)) {
                     visibleWeights.push(h.weight);
                 }
             });
@@ -635,7 +662,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     );
                     items.sort((a, b) => b.weight - a.weight);
 
-                    let html = `<div style="font-weight:bold; margin-bottom:5px;">${date}</div>`;
+                    let html = `<div style="font-weight:bold; margin-bottom:5px;">${escapeHtml(date)}</div>`;
                     items.forEach((h: any) => {
                         const idx = seriesNames.indexOf(h.name);
                         const color = idx >= 0 ? COLOR_PALETTE[idx % COLOR_PALETTE.length] : '#ccc';
@@ -650,7 +677,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                         html += `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; ${rowStyle} ${padding}">
                                     <div style="display:flex; align-items:center; gap:5px;">
                                         ${marker}
-                                        <span>${h.name}</span>
+                                        <span>${escapeHtml(h.name)}</span>
                                     </div>
                                     <span style="font-weight:${isFocused ? '800' : '600'};">${h.weight.toFixed(2)}</span>
                                  </div>`;
@@ -668,8 +695,8 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 const isDimmed = highlightedSeries !== null && !isHighlighted;
 
                 const seriesData = isHidden ? [] : relevantDates.map(d => {
-                    const h = holdings.find(item => item.date === d && item.name === stockName);
-                    return h ? h.weight : null;
+                    const w = holdingsByDateName.get(d)?.get(stockName);
+                    return w !== undefined ? w : null;
                 });
 
                 const baseSeries = {
@@ -710,7 +737,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             }),
             color: COLOR_PALETTE
         };
-    }, [holdings, topN, viewStartDate, viewEndDate, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete, isExpanded, splitRatio]);
+    }, [holdings, holdingsByDateName, topN, viewStartDate, viewEndDate, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete, isExpanded, splitRatio]);
 
     // Right Sidebar Logic
     useEffect(() => {

@@ -7,7 +7,10 @@
 전반적으로 **바이브 코딩 결과물 치고 구조가 명확하고 동작도 견고**하다. 운용사 7곳을 각기 다른 방식(API/HTML/PDF/WebView)으로 다루면서도 `get_etf_holdings` 한 곳으로 분기를 모았고, 스키마 마이그레이션, 자동 업데이터, 즐겨찾기/활성화/사용자추가 ETF까지 실사용 기능이 잘 갖춰져 있다. 아래는 우선순위별 개선 포인트와 추가 기능 제안이다.
 
 > **처리 현황 (2026-06-21 업데이트)**
-> 섹션 1의 1-1·1-2·1-3·1-5·1-6·1-7은 **반영 완료**, 1-4는 **패스(보류)**로 결정. 상세는 각 항목 상단 상태 줄 참고. 프론트 `tsc`/`vite build`, 백엔드 `cargo check` 모두 통과 확인.
+> - 섹션 1: 1-1·1-2·1-3·1-5·1-6·1-7 **반영 완료**, 1-4 **패스(보류)**.
+> - 섹션 2: 2-1·2-2·2-4·2-5 **반영 완료**(2-5는 sanity check까지, 헤더 매핑 리팩터링은 잔여), 2-3은 조치 불필요(이미 안전).
+> - 섹션 3: 3-1·3-2·3-3 **반영 완료**.
+> - 검증: 프론트 `tsc`/`vite build`, 백엔드 `cargo check` 통과 + 개발 모드 기동 스모크 테스트(패닉 0건, WAL 파일 생성, CSP 하 정상 렌더) 확인.
 
 ---
 
@@ -68,18 +71,26 @@
 ## 2. 보안 / 견고성
 
 ### 2-1. 🟠 CSP가 비활성화(`"csp": null`)
+> ✅ **처리 완료** — `tauri.conf.json`의 CSP를 `default-src 'self'; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost`로 설정. 인라인 `<style>`/`style` 속성과 IPC(updater)·asset 프로토콜은 허용하되 script-src는 `'self'`로 제한. 개발 모드 기동 테스트에서 빈 화면/CSP 차단 없이 정상 렌더 확인.
+
 - [tauri.conf.json:22](app/src-tauri/tauri.conf.json#L22). 메인 윈도우는 로컬 번들 자산만 로드하므로 CSP를 켜도 대부분 문제없다. WebView 스크래핑은 별도 `WebviewWindow`(External URL)라 메인 창 CSP와 무관. 최소한의 CSP를 설정해 XSS 표면을 줄이는 것을 권장.
 
 ### 2-2. 🟡 ECharts tooltip에 `innerHTML`로 종목명 직접 삽입
+> ✅ **처리 완료** — `Dashboard`에 `escapeHtml()` 헬퍼를 추가하고 tooltip formatter에서 종목명·날짜를 삽입하기 전에 이스케이프. (HoldingsTable은 JSX 렌더라 React가 자동 이스케이프하므로 별도 조치 불필요.)
+
 - [Dashboard.tsx:618-636](app/src/components/Dashboard.tsx#L618-L636), HoldingsTable 등에서 `h.name`을 그대로 HTML 문자열에 끼워 넣는다. 종목명은 운용사 응답에서 오는 외부 데이터다. 현재 신뢰 가능한 출처지만, 운용사 응답이 오염되면 tooltip이 스크립트 주입 벡터가 될 수 있다(CSP off와 결합 시 위험 ↑). 이스케이프 처리 권장.
 
 ### 2-3. 🟢 SQL 인젝션은 안전
 - 모든 쿼리가 바인드 파라미터를 사용. `add_etf_from_url`은 도메인 화이트리스트로 SSRF도 어느 정도 방어. (좋음)
 
 ### 2-4. 🟡 HTTP 수집에 재시도/백오프 없음
+> ✅ **처리 완료** — `fetch.rs`에 `send_with_retry()`(최대 3회, 네트워크 오류 및 5xx/429에 지수 백오프 300ms·600ms) 추가. 데이터 수집 fetcher 5종(rise/plus/time/tiger/ace)의 송신부에 적용. KoAct/KODEX는 WebView 경로라 제외.
+
 - KoAct WebView 외 일반 reqwest 경로([fetch.rs](app/src-tauri/src/fetch.rs))는 1회 실패 시 그냥 에러. 운용사 사이트는 일시적 5xx/타임아웃이 잦다. 지수 백오프 재시도(2~3회)를 넣으면 일괄 업데이트 성공률이 올라간다.
 
 ### 2-5. 🟡 스크래퍼 파싱이 사이트 구조에 강하게 결합
+> ✅ **처리(부분) 완료** — `check_weight_sanity()`를 추가해 수집 결과의 비중 합계가 정상 범위(50~150%)를 벗어나면 `get_etf_holdings` 응답 메시지에 ⚠️ 경고를 덧붙임(컬럼 밀림 등 조용한 오파싱을 드러냄). 헤더명 기반 매핑으로의 전환은 별도 리팩터링 과제로 남김.
+
 - RISE([fetch.rs:361-393](app/src-tauri/src/fetch.rs#L361-L393)), TIGER, TIME 모두 컬럼 인덱스(`cells[2]`, `cells[4]`...)에 의존한다. 운용사가 표 구조를 바꾸면 조용히 잘못된 컬럼을 파싱(수량↔비중 뒤바뀜 등)할 수 있다. 헤더명 기반 매핑이나, 파싱 후 `weight` 합계가 비정상(예: 0 또는 >100*1.5)이면 경고하는 sanity check가 있으면 좋다.
 
 ---
@@ -87,13 +98,19 @@
 ## 3. 성능 / 데이터베이스
 
 ### 3-1. 🟠 holdings 조회용 인덱스 부재
+> ✅ **처리 완료** — `db.rs` 초기화에 `CREATE INDEX IF NOT EXISTS idx_holdings_etf_date ON holdings(etf_code, date)` 추가. 기존 DB(4.9MB)에서도 기동 시 정상 생성 확인.
+
 - PK가 `(date, etf_code, stock_code)`인데, 가장 빈번한 쿼리 `get_holdings`([commands.rs:68-79](app/src-tauri/src/commands.rs#L68-L79))는 `WHERE etf_code = ?`(date 없음)다. PK는 date가 선두라 이 쿼리에 활용되지 못해 **풀 스캔**이 된다. 데이터가 쌓일수록 ETF 전환이 느려진다.
 - `CREATE INDEX idx_holdings_etf_date ON holdings(etf_code, date)` 하나면 `get_holdings`, `get_holdings_by_date`, `get_latest_date_before`, `check_holdings_exist`가 모두 빨라진다.
 
 ### 3-2. 🟡 일괄 INSERT가 건건 트랜잭션
+> ✅ **처리 완료** — `get_etf_holdings`의 holdings INSERT 루프를 단일 트랜잭션(`begin`/`commit`)으로 묶음. 추가로 `db.rs`에서 `PRAGMA journal_mode=WAL` + `synchronous=NORMAL` 설정(런타임에서 `activeetf.db-wal`/`-shm` 생성 확인). (commands.rs의 `run_sidecar`는 1-3에서 제거됨.)
+
 - [fetch.rs:112-127](app/src-tauri/src/fetch.rs#L112-L127), [commands.rs:40-55](app/src-tauri/src/commands.rs#L40-L55) — holding 한 건마다 개별 `execute`. 종목 수백 개면 fsync 비용이 누적된다. 하나의 트랜잭션으로 묶거나 `WAL` 모드 + 배치로 처리하면 빨라진다.
 
 ### 3-3. 🟡 Dashboard 차트 계산의 반복 `holdings.find`/`includes`
+> ✅ **처리 완료** — `holdingsByDateName`(`Map<date, Map<name, weight>>`) 메모를 추가해 시리즈 데이터 생성의 `holdings.find(...)`를 O(1) 조회로 교체. `seriesNames`/`canSplit`/`chartOption`의 `relevantDates.includes`·`seriesNames.includes`도 `Set` 조회로 전환.
+
 - [Dashboard.tsx:650-653](app/src/components/Dashboard.tsx#L650-L653) 등에서 날짜×시리즈마다 `holdings.find(...)`, `relevantDates.includes(...)`를 호출 → O(N²~N³) 경향. 종목 100개 × 수십 일이면 렌더가 무거워진다. `Map<date, Map<name, weight>>`로 한 번 인덱싱해두면 대폭 개선.
 
 ---
@@ -157,10 +174,11 @@
 |------|------|------|------|
 | 1 | 사용자 추가 ETF 업데이트 경로(1-1) | 기능이 사실상 미완성 | ✅ 완료 |
 | 2 | 편입/편출 키를 stock_code로 통일(1-2) | 오탐 가능성 + 로직 중복 | ✅ 완료(프론트), 4-2는 잔여 |
-| 3 | holdings 인덱스 추가(3-1) | 데이터 증가 시 체감 성능 | ⬜ 미착수 |
+| 3 | holdings 인덱스 추가 + WAL/트랜잭션(3-1, 3-2) | 데이터 증가 시 체감 성능 | ✅ 완료 |
 | 4 | DB 저장 위치 재검토(1-4) | macOS 업데이트 데이터 유실 위험 | ⏭️ 패스(보류) |
 | 5 | 데드 코드/타입 정리(4-1 일부, 1-3) | 유지보수성 + 권한 축소 | ✅ 미사용 커맨드 제거 |
-| 6 | 스크래퍼 재시도 + sanity check(2-4, 2-5) | 일괄 수집 신뢰성 | ⬜ 미착수 |
+| 6 | 스크래퍼 재시도 + sanity check(2-4, 2-5) | 일괄 수집 신뢰성 | ✅ 완료(헤더 매핑 잔여) |
 | 7 | analyze 날짜 스냅 / PLUS price 문서화 / sleep 정리(1-5,1-6,1-7) | UX·정합성 | ✅ 완료 |
+| 8 | CSP 활성화 / tooltip 이스케이프 / 차트 인덱싱(2-1, 2-2, 3-3) | 보안·성능 | ✅ 완료 |
 
 세부 위치는 각 항목의 파일:라인 링크를 참고. 추가로 깊게 보고 싶은 항목이 있으면 알려주세요.

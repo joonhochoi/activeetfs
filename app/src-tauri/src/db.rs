@@ -30,6 +30,11 @@ pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error:
         .connect(&db_url)
         .await?;
 
+    // WAL 모드: 읽기/쓰기 동시성 향상 + 일괄 INSERT 시 쓰기 성능 개선.
+    // journal_mode는 DB 파일에 영속되는 속성이므로 한 번만 설정하면 된다.
+    let _ = sqlx::query("PRAGMA journal_mode=WAL;").execute(&pool).await;
+    let _ = sqlx::query("PRAGMA synchronous=NORMAL;").execute(&pool).await;
+
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS managers (
             id TEXT PRIMARY KEY,
@@ -92,6 +97,14 @@ pub async fn init_db(_app: &AppHandle) -> Result<SqlitePool, Box<dyn std::error:
 
     // Migration: Add is_user_added flag (distinguishes runtime-added ETFs from JSON-seeded ones)
     let _ = sqlx::query("ALTER TABLE etfs ADD COLUMN is_user_added BOOLEAN DEFAULT 0").execute(&pool).await;
+
+    // 인덱스: holdings의 가장 빈번한 조회는 etf_code(+date) 기준이다.
+    // PK가 (date, etf_code, stock_code)라 date 없이 etf_code만으로 거르는 쿼리는
+    // PK를 활용하지 못해 풀스캔이 된다. 보조 인덱스로 get_holdings / get_holdings_by_date /
+    // get_latest_date_before / check_holdings_exist 를 모두 가속한다.
+    let _ = sqlx::query("CREATE INDEX IF NOT EXISTS idx_holdings_etf_date ON holdings(etf_code, date)")
+        .execute(&pool)
+        .await;
 
     seed_db(&pool).await?;
 

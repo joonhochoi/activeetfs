@@ -107,11 +107,12 @@ pub async fn get_etf_holdings(
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
-    // 2. DB에 저장하기
-    // 2. Save to DB
+    // 2. DB에 저장하기 (단일 트랜잭션으로 묶어 fsync 비용을 줄인다)
+    // 2. Save to DB inside one transaction
+    let mut tx = state.db.begin().await.map_err(|e| e.to_string())?;
     for holding in &holdings {
         sqlx::query(
-            "INSERT OR REPLACE INTO holdings (date, etf_code, stock_code, stock_name, weight, quantity, price) 
+            "INSERT OR REPLACE INTO holdings (date, etf_code, stock_code, stock_name, weight, quantity, price)
              VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&holding.date)
@@ -121,12 +122,67 @@ pub async fn get_etf_holdings(
         .bind(holding.weight)
         .bind(holding.quantity)
         .bind(holding.price)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
+    tx.commit().await.map_err(|e| e.to_string())?;
 
-    Ok(format!("Successfully updated {} holdings", holdings.len()))
+    // 3. 파싱 결과 sanity check: 비중 합계가 비정상이면 경고를 메시지에 덧붙인다.
+    //    (사이트 구조 변경으로 컬럼이 밀려 weight를 잘못 읽는 경우를 조기에 드러낸다)
+    let msg = format!("Successfully updated {} holdings", holdings.len());
+    match check_weight_sanity(&holdings) {
+        Some(warn) => Ok(format!("{} ⚠️ {}", msg, warn)),
+        None => Ok(msg),
+    }
+}
+
+// 비중(weight) 합계 sanity check. 정상적인 ETF PDF라면 합계가 100% 부근이다.
+// 합계가 비어 있거나(파싱 실패) 정상 범위를 크게 벗어나면 경고 문자열을 반환한다.
+fn check_weight_sanity(holdings: &[Holding]) -> Option<String> {
+    if holdings.is_empty() {
+        return None; // 빈 결과는 "0 holdings" 메시지로 이미 드러나므로 별도 경고 생략
+    }
+    let sum: f64 = holdings.iter().map(|h| h.weight).sum();
+    if sum < 50.0 || sum > 150.0 {
+        return Some(format!(
+            "비중 합계가 비정상입니다({:.1}%). 운용사 사이트 구조 변경/파싱 오류 가능성이 있습니다.",
+            sum
+        ));
+    }
+    None
+}
+
+// HTTP 요청 재시도 헬퍼: 네트워크 오류 또는 서버측 일시 오류(5xx/429)일 때 지수 백오프로 재시도한다.
+// build 클로저는 매 시도마다 RequestBuilder를 새로 만든다(요청은 한 번만 소비되므로).
+async fn send_with_retry<F>(build: F) -> Result<reqwest::Response, Box<dyn std::error::Error>>
+where
+    F: Fn() -> reqwest::RequestBuilder,
+{
+    const MAX_ATTEMPTS: u32 = 3;
+    let mut last_err: String = String::new();
+    for attempt in 1..=MAX_ATTEMPTS {
+        match build().send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                // 일시적 서버 오류는 재시도 대상. 그 외(성공/4xx 등)는 그대로 반환해 호출부가 처리.
+                if (status.is_server_error() || status.as_u16() == 429) && attempt < MAX_ATTEMPTS {
+                    last_err = format!("status {}", status);
+                    tokio::time::sleep(Duration::from_millis(300 * attempt as u64)).await;
+                    continue;
+                }
+                return Ok(resp);
+            }
+            Err(e) => {
+                last_err = e.to_string();
+                if attempt < MAX_ATTEMPTS {
+                    tokio::time::sleep(Duration::from_millis(300 * attempt as u64)).await;
+                    continue;
+                }
+            }
+        }
+    }
+    Err(format!("요청 실패(재시도 {}회): {}", MAX_ATTEMPTS, last_err).into())
 }
 
 // KoAct 및 Kodex 데이터 가져오기 (WebView 스크래퍼 사용)
@@ -332,12 +388,8 @@ async fn fetch_rise(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
     headers.insert("Referer", format!("https://www.riseetf.co.kr/prod/finderDetail/{}?searchFlag=viewtab3", id).parse().unwrap());
     headers.insert("X-Requested-With", "XMLHttpRequest".parse().unwrap());
 
-    // POST 요청 전송
-    let resp = client.post(url)
-        .headers(headers)
-        .form(&params)
-        .send()
-        .await?;
+    // POST 요청 전송 (일시 오류 시 재시도)
+    let resp = send_with_retry(|| client.post(url).headers(headers.clone()).form(&params)).await?;
 
     if !resp.status().is_success() {
         return Err(format!("Bad status: {}", resp.status()).into());
@@ -415,7 +467,7 @@ async fn fetch_plus(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
             id, page, clean_date
         );
 
-        let resp = client.get(&url).send().await?;
+        let resp = send_with_retry(|| client.get(&url)).await?;
         if !resp.status().is_success() {
             return Err(format!("Bad status: {} (page {})", resp.status(), page).into());
         }
@@ -502,12 +554,7 @@ async fn fetch_tiger(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, B
         };
 
 
-        let resp = client
-            .post(url)
-            .headers(headers)
-            .body(body)
-            .send()
-            .await?;
+        let resp = send_with_retry(|| client.post(url).headers(headers.clone()).body(body.clone())).await?;
 
         let status = resp.status();
         if !status.is_success() {
@@ -593,7 +640,7 @@ async fn fetch_time(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Bo
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         .build()?;
 
-    let resp = client.get(&url).send().await?;
+    let resp = send_with_retry(|| client.get(&url)).await?;
     if !resp.status().is_success() {
         return Err(format!("Bad status: {}", resp.status()).into());
     }
@@ -669,10 +716,7 @@ async fn fetch_ace(id: &str, code: &str, date: &str) -> Result<Vec<Holding>, Box
     headers.insert("Referer", "https://www.aceetf.co.kr/".parse().unwrap());
     headers.insert("Accept", "application/json, text/plain, */*".parse().unwrap());
 
-    let resp = client.get(&url)
-        .headers(headers)
-        .send()
-        .await?;
+    let resp = send_with_retry(|| client.get(&url).headers(headers.clone())).await?;
 
     if !resp.status().is_success() {
         return Err(format!("Bad status: {}", resp.status()).into());
