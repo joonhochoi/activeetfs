@@ -8,7 +8,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { Holding } from '../types';
 import HoldingsTable from './HoldingsTable';
 import { resolveEtf, fetchUserEtfs, UserEtf } from '../utils/etfs';
-import { toLocalDateString } from '../utils/date';
+import { toLocalDateString, snapToAvailableDate } from '../utils/date';
 
 interface DashboardProps {
     etfCode: string;
@@ -29,6 +29,10 @@ interface LogItem {
 }
 
 const COLOR_PALETTE = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+
+// 로그 영속화: ETF 전환·앱 재시작에도 로그가 유지되도록 localStorage에 보관한다.
+const LOG_STORAGE_KEY = 'dashboard_logs';
+const MAX_PERSISTED_LOGS = 300; // 무한 증가 방지용 상한
 
 // ECharts tooltip은 innerHTML 문자열로 렌더링되므로, 외부(운용사 응답)에서 온 종목명 등을
 // 그대로 삽입하면 HTML/스크립트 주입 위험이 있다. 삽입 전 반드시 이스케이프한다.
@@ -67,10 +71,26 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     const [selectedTableDate, setSelectedTableDate] = useState<string>('');
     const [comparisonDate, setComparisonDate] = useState<string>('');
 
-    // Logs
+    // Logs (localStorage에서 복원 — ETF 전환/재시작에도 유지)
     const [isLogsOpen, setIsLogsOpen] = useState<boolean>(true);
-    const [logs, setLogs] = useState<LogItem[]>([]);
+    const [logs, setLogs] = useState<LogItem[]>(() => {
+        try {
+            const raw = localStorage.getItem(LOG_STORAGE_KEY);
+            return raw ? (JSON.parse(raw) as LogItem[]) : [];
+        } catch {
+            return [];
+        }
+    });
     const logsEndRef = useRef<HTMLDivElement>(null);
+
+    // 로그가 바뀔 때마다 localStorage에 저장(최근 MAX_PERSISTED_LOGS개만).
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs.slice(-MAX_PERSISTED_LOGS)));
+        } catch {
+            /* 용량 초과 등은 무시 */
+        }
+    }, [logs]);
 
     // 사용자 추가(URL) ETF까지 포함해 선택된 ETF의 수집 정보를 해석한다.
     const [userEtfs, setUserEtfs] = useState<UserEtf[]>([]);
@@ -274,7 +294,8 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             setHoldings([]);
             setUpdateCandidates(new Set());
             setAvailableDataDates(new Set());
-            setLogs([]); // Clear logs on switch
+            // 로그는 비우지 않고 영속한다(수집 실패 추적용). 전환 시 구분선만 남긴다.
+            addLog(`──────── ${resolved?.name || etfCode} ────────`, 'info');
 
             // Mark initial animation as done after 1.5s
             const timer = setTimeout(() => {
@@ -419,18 +440,11 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             addLog("No data found", "error");
             return;
         }
-        const snapToData = (target: string): string => {
-            let snapped = availableDates[0];
-            for (const d of availableDates) {
-                if (d <= target) snapped = d; else break;
-            }
-            return snapped;
-        };
 
         const reqStart = toLocalDateString(viewStartDate);
         const reqEnd = toLocalDateString(viewEndDate);
-        const startStr = snapToData(reqStart);
-        const endStr = snapToData(reqEnd);
+        const startStr = snapToAvailableDate(reqStart, availableDates) ?? reqStart;
+        const endStr = snapToAvailableDate(reqEnd, availableDates) ?? reqEnd;
 
         if (startStr !== reqStart || endStr !== reqEnd) {
             addLog(`선택일에 데이터가 없어 가장 가까운 데이터일로 보정: ${startStr} ~ ${endStr}`, "info");
@@ -740,11 +754,16 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             const tableHoldings = holdings.filter(h => h.date === (selectedTableDate || toLocalDateString(targetDate)));
             tableHoldings.sort((a, b) => b.weight - a.weight);
 
-            const compHoldings = comparisonDate
-                ? holdings.filter(h => h.date === comparisonDate)
+            // 비교 날짜에 데이터가 없으면(주말·미수집일 등) 가장 가까운 데이터일로 스냅한다.
+            const sortedDates = Array.from(new Set(holdings.map(h => h.date))).sort();
+            const snappedComparison = comparisonDate
+                ? (snapToAvailableDate(comparisonDate, sortedDates) ?? comparisonDate)
+                : '';
+            const compHoldings = snappedComparison
+                ? holdings.filter(h => h.date === snappedComparison)
                 : undefined;
 
-            const availableDates = new Set(holdings.map(h => h.date));
+            const availableDates = new Set(sortedDates);
 
             setRightPanelContent(
                 <HoldingsTable
@@ -762,7 +781,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     comparisonHoldings={compHoldings}
                     onCompare={setComparisonDate}
                     availableDates={availableDates}
-                    compareDate={comparisonDate}
+                    compareDate={snappedComparison}
                 />
             );
         }
@@ -980,6 +999,22 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                 }}>
                 {loading ? (
                     <div className="spinner" style={{ margin: 'auto' }}></div>
+                ) : holdings.length === 0 ? (
+                    <div style={{
+                        margin: 'auto',
+                        textAlign: 'center',
+                        color: '#64748b',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '14px'
+                    }}>
+                        <div style={{ fontSize: '2.5rem', opacity: 0.3 }}>🗂️</div>
+                        <div style={{ fontSize: '1.05rem', color: '#94a3b8' }}>아직 수집된 데이터가 없습니다</div>
+                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                            상단의 날짜를 선택하고 <span style={{ color: '#cbd5e1', fontWeight: 600 }}>Update</span> 버튼을 눌러 데이터를 가져오세요.
+                        </div>
+                    </div>
                 ) : (
                     <>
                         <ReactECharts

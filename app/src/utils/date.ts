@@ -6,3 +6,19 @@ export const toLocalDateString = (date: Date): string => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
+// 데이터가 있는 날짜 목록(오름차순)에서 target 이하의 가장 가까운 날짜로 스냅한다.
+// target 이전 데이터가 없으면 가장 이른 날짜를 반환한다. 목록이 비면 null.
+// 주말·공휴일·미수집일을 선택해도 가장 가까운 실제 데이터일로 자동 보정하는 데 쓴다.
+export const snapToAvailableDate = (
+    target: string,
+    availableDatesSorted: string[],
+): string | null => {
+    if (availableDatesSorted.length === 0) return null;
+    let snapped = availableDatesSorted[0];
+    for (const d of availableDatesSorted) {
+        if (d <= target) snapped = d;
+        else break;
+    }
+    return snapped;
+};

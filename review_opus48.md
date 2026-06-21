@@ -164,11 +164,12 @@
 
 ## 5. UX 개선 제안
 
-- **분석 날짜 스냅**(1-7) — 데이터 없는 날짜 선택 시 가장 가까운 영업일로 자동 보정.
-- **차트 빈 상태 안내** — 데이터가 없는 ETF(특히 사용자 추가분)에서 "아직 수집된 데이터가 없습니다. Update를 눌러주세요" 안내. 현재는 빈 차트만 보임.
-- **로그 영속화** — Dashboard 로그는 ETF 전환 시 사라진다([Dashboard.tsx:256](app/src/components/Dashboard.tsx#L256)). 수집 실패 원인 추적이 어렵다.
-- **TIGER 당일 데이터 부재 안내**가 헤더 텍스트로만 있음([UpdateTodayWindow.tsx:303](app/src/components/UpdateTodayWindow.tsx#L303)). provider별 "T-1만 제공" 같은 메타를 카탈로그에 두고 UI에서 자동 처리하면 깔끔.
-- **즐겨찾기/사용자추가 ETF 삭제 기능 부재** — 추가는 되는데(`add_etf_from_url`) 제거 커맨드가 없다. 잘못 추가하면 DB를 직접 만져야 함.
+- ✅ **분석 날짜 스냅** — `utils/date.ts`의 `snapToAvailableDate()`로 공통화. Analyze(1-7)에 더해 **우측 패널 비교 날짜**도 데이터 없는 날을 고르면 가장 가까운 데이터일로 자동 보정.
+- ✅ **차트 빈 상태 안내** — 데이터가 없는 ETF(특히 사용자 추가분)에서 빈 차트 대신 "아직 수집된 데이터가 없습니다 / Update를 눌러주세요" 안내 표시.
+- ✅ **로그 영속화** — Dashboard 로그를 localStorage에 보관(최근 300개)해 ETF 전환·앱 재시작에도 유지. 전환 시 비우지 않고 `──── ETF명 ────` 구분선만 남김. (Clear Logs로 수동 삭제 가능)
+- ✅ **(추가) Select ETFs 데이터 날짜 표시** — `get_etf_enabled_list`에 `MAX(date)`(lastDate) 추가, 창에서 `20일 (26-03-17)`처럼 마지막 데이터 날짜를 함께 표시.
+- ⬜ **TIGER 당일 데이터 부재 안내**가 헤더 텍스트로만 있음([UpdateTodayWindow.tsx:303](app/src/components/UpdateTodayWindow.tsx#L303)). provider별 "T-1만 제공" 같은 메타를 카탈로그에 두고 UI에서 자동 처리하면 깔끔.
+- ⬜ **즐겨찾기/사용자추가 ETF 삭제 기능 부재** — 추가는 되는데(`add_etf_from_url`) 제거 커맨드가 없다. 잘못 추가하면 DB를 직접 만져야 함.
 
 ---
 

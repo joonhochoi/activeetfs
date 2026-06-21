@@ -7,6 +7,7 @@ interface EtfItem {
     name: string;
     isEnabled: boolean;
     dataCount: number;
+    lastDate: string | null;
 }
 
 interface ManagerGroup {
@@ -19,7 +20,11 @@ interface EtfSetting {
     code: string;
     isEnabled: boolean;
     dataCount: number;
+    lastDate: string | null;
 }
+
+// '2026-06-02' → '26-06-02'
+const shortDate = (d: string | null): string => (d ? d.slice(2) : '');
 
 const ToggleSwitch: React.FC<{ enabled: boolean; onChange: () => void }> = ({ enabled, onChange }) => (
     <div
@@ -69,6 +74,7 @@ const SelectEtfsWindow: React.FC = () => {
                             name: etf.name,
                             isEnabled: db ? db.isEnabled : true,
                             dataCount: db ? db.dataCount : 0,
+                            lastDate: db ? db.lastDate : null,
                         };
                     }),
                 }));
@@ -230,8 +236,10 @@ const SelectEtfsWindow: React.FC = () => {
                                     }}>
                                         {etf.name}
                                     </span>
-                                    <span style={{ fontSize: '0.7rem', color: '#e2e8f0', minWidth: '44px', textAlign: 'right' }}>
-                                        {etf.dataCount > 0 ? `${etf.dataCount}일` : ''}
+                                    <span style={{ fontSize: '0.7rem', color: '#e2e8f0', minWidth: '110px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                        {etf.dataCount > 0
+                                            ? `${etf.dataCount}일${etf.lastDate ? ` (${shortDate(etf.lastDate)})` : ''}`
+                                            : ''}
                                     </span>
                                     <ToggleSwitch
                                         enabled={etf.isEnabled}

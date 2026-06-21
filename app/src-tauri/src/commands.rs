@@ -146,6 +146,7 @@ pub struct EtfSetting {
     pub code: String,
     pub is_enabled: bool,
     pub data_count: i64,
+    pub last_date: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -163,10 +164,11 @@ pub async fn get_etf_enabled_list(
         r#"
         SELECT e.code,
                COALESCE(e.is_enabled, 1) as is_enabled,
-               COALESCE(h.cnt, 0) as data_count
+               COALESCE(h.cnt, 0) as data_count,
+               h.last_date as last_date
         FROM etfs e
         LEFT JOIN (
-            SELECT etf_code, COUNT(DISTINCT date) as cnt
+            SELECT etf_code, COUNT(DISTINCT date) as cnt, MAX(date) as last_date
             FROM holdings
             GROUP BY etf_code
         ) h ON h.etf_code = e.code
