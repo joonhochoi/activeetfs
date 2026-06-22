@@ -39,6 +39,7 @@ pub fn run(context: tauri::Context) {
             commands::add_etf_from_url,
             commands::get_user_added_etfs,
             commands::remove_user_etf,
+            commands::search_stock_in_etfs,
             commands::export_database,
             commands::import_database
         ])

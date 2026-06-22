@@ -306,6 +306,55 @@ pub async fn remove_user_etf(
     Ok(())
 }
 
+// ── 종목 검색 (이 종목을 담고 있는 ETF 역조회) ────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct StockSearchRow {
+    pub stock_code: String,
+    pub stock_name: String,
+    pub etf_code: String,
+    pub weight: f64,
+    pub date: String,
+}
+
+/// 종목명 또는 종목코드로 검색해, 해당 종목을 보유한 모든 ETF를 각 ETF의 최신 보유일 기준으로 반환한다.
+/// (ETF×종목 조합별로 가장 최근 날짜의 행만 추림)
+#[tauri::command]
+pub async fn search_stock_in_etfs(
+    state: tauri::State<'_, AppState>,
+    query: String,
+) -> Result<Vec<StockSearchRow>, String> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pattern = format!("%{}%", q);
+
+    let rows = sqlx::query_as::<_, StockSearchRow>(
+        r#"
+        SELECT h.stock_code, h.stock_name, h.etf_code, h.weight, h.date
+        FROM holdings h
+        JOIN (
+            SELECT etf_code, stock_code, MAX(date) AS md
+            FROM holdings
+            WHERE stock_name LIKE ?1 OR stock_code LIKE ?1
+            GROUP BY etf_code, stock_code
+        ) t
+          ON h.etf_code = t.etf_code
+         AND h.stock_code = t.stock_code
+         AND h.date = t.md
+        ORDER BY h.stock_name ASC, h.weight DESC
+        "#,
+    )
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
 // ── 데이터 백업/복원 ──────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]

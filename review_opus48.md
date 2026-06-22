@@ -189,13 +189,24 @@
 
 ---
 
+## 5-quinquies. (보류) 콘솔 자동 업데이트 모드 — `activeetf.exe --todayupdate`
+
+> ⏸️ **보류** — GUI 없이 커맨드라인에서 today-update를 실행해 외부 스케줄러(예: Windows Task Scheduler)로 매일 자동 수집하자는 아이디어. 기술적으로는 "메인 창만 안 띄우고 기존 숨김 WebView 우회는 그대로 재사용하는 헤드리스-ish 모드"로 구현 가능하나, **KoAct/KODEX의 Cloudflare 챌린지를 무인 환경에서 100% 통과한다는 보장이 없는 것**이 핵심 장애물.
+>
+> - 통과 본질이 "진짜 브라우저 엔진의 JS 챌린지 실행"이라 reqwest 단독으로는 불가. 현실적 완화책은 ① WebView2 user-data-dir 영속화로 `cf_clearance` 쿠키 재사용 ② 무인이라 수동 인증 바를 못 쓰므로 막힌 provider는 graceful skip + nonzero exit code. 하지만 어느 쪽도 "걸면 무조건 다 된다"를 보장하지 못함.
+> - 사용자 기대치("update 걸면 전부 성공")와 부분 실패 가능성의 간극 때문에, 깔끔하게 완결되지 않는 상태로는 출시 보류하기로 결정.
+> - 향후 재검토 시: Rust 스텔스 브라우저(`chromiumoxide` 등 CDP 기반) 활용 가능성 조사. 단 Cloudflare는 IP 평판 + JS 챌린지 + TLS(JA3) 지문을 종합 판단하므로 헤드리스라도 보장은 어려움.
+> - 선행 리팩터링 필요: today-update 오케스트레이션이 현재 [UpdateTodayWindow.tsx](app/src/components/UpdateTodayWindow.tsx)(프론트)에 있어, 콘솔 모드용으로 Rust 측 `run_today_update_all()` 공통 함수 추출이 전제.
+
+---
+
 ## 6. 추가하면 좋을 기능 제안
 
 1. ✅ **사용자 추가 ETF 업데이트 지원 (1-1에서 해결 완료)** — Dashboard 개별 Update·UpdateAll·UpdateToday가 모두 `getAllEtfTargets()`(카탈로그+DB)를 사용. 더불어 Select ETFs 창에도 사용자 추가 ETF를 노출(`추가` 배지)해 활성/비활성 토글까지 가능하도록 보강.
 2. ✅ **사용자 추가 ETF 삭제** — 백엔드 `remove_user_etf(code)` 커맨드 추가(`is_user_added=1` 가드, 보유 데이터까지 트랜잭션 삭제). Select ETFs 창에서 사용자 추가 ETF 행에만 `삭제` 버튼 노출, 클릭 시 확인 모달(데이터 동반 삭제 경고) 후 삭제하고 BroadcastChannel로 사이드바 갱신.
 3. **금액/평가액 기반 분석** — `quantity`·`price`가 이미 저장되므로, 비중 외에 보유 금액 추이, 매수/매도 추정(수량 변화)을 보여줄 수 있다. (PLUS는 price 0이라 별도 처리.)
 4. **CSV/Excel 내보내기** — 특정 ETF의 기간별 보유/비중을 내보내기. 투자자 수요가 큼.
-5. **여러 ETF 교차 비교** — "이 종목을 담고 있는 모든 ETF" 역조회. `holdings`에 stock_code 인덱스만 있으면 쉽게 가능하고, 액티브 ETF 추종자에게 매우 유용.
+5. ✅ **종목 역조회 (구현 완료)** — 사이드바를 List/Search 탭 구조로 개편하고, Search 탭에 "이 종목을 담고 있는 모든 ETF" 역조회를 추가. 백엔드 `search_stock_in_etfs(query)`가 종목명/코드 LIKE 검색으로 ETF×종목별 최신 보유일 행을 반환, 프론트에서 종목별로 묶어 보유 ETF 수·비중과 함께 표시(클릭 시 해당 ETF로 이동). (향후 확장: 여러 ETF 비중 동시 비교, 보유 금액 기준 검색 등을 같은 탭에 추가 가능.)
 6. **자동 스케줄 수집** — Tauri 백그라운드 + 평일 장마감 후 자동 업데이트(현재는 수동). OS 알림으로 편입/편출 변동 통지.
 7. ✅ **데이터 백업/복원 (구현 완료)** — Menu에 "내보내기(백업)/가져오기(복원)" 추가. 내보내기는 etfs(즐겨찾기·활성화·사용자추가 플래그 포함)+holdings 전체를 gzip 압축 JSON(`.aetf`)으로 저장(`.json` 확장자 선택 시 평문). 가져오기는 두 모드 제공: **빈 날짜만 채우기**(기존 데이터 보존, 비어 있는 ETF·날짜만 추가) / **전체 덮어쓰기**(백업 기준으로 덮어쓰기). 백엔드 `export_database`/`import_database`(트랜잭션, gzip 매직바이트 자동 감지), dialog open/save 권한 추가. 복원 후 BroadcastChannel+refresh-data로 사이드바·대시보드 즉시 갱신.
 8. **테스트 도입** — 최소한 각 운용사 파서에 대해 저장된 HTML/JSON 픽스처 기반 단위 테스트. 사이트 구조 변경 시 회귀를 잡는 가장 비용 대비 효과 큰 투자(현재 테스트 0개).
