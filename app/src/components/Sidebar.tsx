@@ -194,7 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
                             style={{
                                 width: '100%',
                                 textAlign: 'left',
-                                background: '#1e40af',
+                                background: '#172554',
                                 border: 'none',
                                 color: '#fff',
                                 cursor: 'pointer',
@@ -323,7 +323,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
                 >🔍</button>
             </div>
             <div style={{ fontSize: '0.62rem', color: 'var(--secondary-color)', lineHeight: 1.4 }}>
-                검색 종목 보유 ETF 찾기 (각 ETF 최신 보유일 기준) , 검색후 선택 ETF 비교 가능
+                검색 종목 보유 ETF 찾기 (각 ETF 최신 보유일 기준) , 검색후 최대 5개 ETF 비교 가능
             </div>
 
             {searching && (
