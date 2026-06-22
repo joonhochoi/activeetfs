@@ -12,7 +12,11 @@ interface UserEtf {
 interface SidebarProps {
     onSelectEtf: (code: string) => void;
     favorites?: Set<string>;
+    onCompareEtfs?: (codes: string[]) => void;
 }
+
+// 비교 뷰에서 동시에 볼 수 있는 ETF 최대 개수
+const MAX_COMPARE = 4;
 
 interface StockSearchRow {
     stockCode: string;
@@ -30,7 +34,7 @@ interface StockGroup {
 
 type Tab = 'list' | 'search';
 
-const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs }) => {
     const [activeTab, setActiveTab] = useState<Tab>('list');
     // 기본은 전부 펼침. 접은 운용사만 보관한다.
     const [collapsedManagers, setCollapsedManagers] = useState<Set<string>>(new Set());
@@ -42,6 +46,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
     const [searchResults, setSearchResults] = useState<StockGroup[] | null>(null);
     const [searching, setSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
+    // 비교용 선택(검색 결과 ETF code 집합)
+    const [selected, setSelected] = useState<Set<string>>(new Set());
 
     const fetchEnabledCodes = () => {
         invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
@@ -125,6 +131,24 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
 
     const shortDate = (d: string) => (d.length >= 8 ? d.slice(2) : d);
 
+    const toggleSelect = (code: string) => {
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(code)) {
+                next.delete(code);
+            } else {
+                if (next.size >= MAX_COMPARE) return prev; // 최대 개수 초과 시 무시
+                next.add(code);
+            }
+            return next;
+        });
+    };
+
+    const runCompare = () => {
+        if (selected.size < 2) return;
+        onCompareEtfs?.(Array.from(selected));
+    };
+
     // ── List 탭 ───────────────────────────────────────────────────────────
     const renderList = () => (
         <div style={{ padding: '6px 6px 12px' }}>
@@ -141,9 +165,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                 ];
                 if (visibleEtfs.length === 0) return null;
 
+                // 모든 ETF명이 브랜드 접두어(TIME/KoAct/KODEX…)로 시작하므로,
+                // 운용사 헤더에는 그 브랜드를 표시하고 ETF명에서는 접두어를 잘라 정보 밀도를 높인다.
+                const brand = visibleEtfs[0]?.name.split(/\s+/)[0] || manager.name;
+                const stripBrand = (name: string) =>
+                    name.startsWith(brand + ' ') ? name.slice(brand.length + 1) : name;
+
                 const isExpanded = !collapsedManagers.has(manager.id);
                 return (
-                    <div key={manager.id} style={{ marginBottom: '2px' }}>
+                    <div key={manager.id} style={{ marginBottom: '4px' }}>
                         <button
                             onClick={() => toggleManager(manager.id)}
                             style={{
@@ -153,18 +183,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                 border: 'none',
                                 color: 'var(--secondary-color)',
                                 cursor: 'pointer',
-                                padding: '3px 6px',
+                                padding: '4px 6px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '5px',
-                                fontSize: '0.66rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.5px',
+                                gap: '6px',
+                                fontSize: '0.72rem',
+                                letterSpacing: '0.3px',
                                 fontWeight: 700,
                             }}
                         >
-                            <span style={{ fontSize: '0.55rem', opacity: 0.7, width: '8px' }}>{isExpanded ? '▼' : '▶'}</span>
-                            <span style={{ flex: 1 }}>{manager.name}</span>
+                            <span style={{ fontSize: '0.58rem', opacity: 0.7, width: '8px' }}>{isExpanded ? '▼' : '▶'}</span>
+                            <span style={{ flex: 1 }}>{brand}</span>
                             <span style={{ opacity: 0.5, fontWeight: 500 }}>{visibleEtfs.length}</span>
                         </button>
 
@@ -180,16 +209,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                                 style={{
                                                     width: '100%',
                                                     textAlign: 'left',
-                                                    padding: '3px 8px 3px 19px',
+                                                    padding: '4px 8px 4px 22px',
                                                     background: 'transparent',
                                                     border: 'none',
                                                     color: isFav ? '#fbbf24' : 'var(--text-color)',
-                                                    borderRadius: '5px',
-                                                    fontSize: '0.72rem',
-                                                    lineHeight: 1.35,
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.8rem',
+                                                    lineHeight: 1.4,
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '7px',
+                                                    gap: '8px',
                                                     cursor: 'pointer',
                                                     transition: 'background 0.15s',
                                                     fontWeight: isFav ? 600 : 400,
@@ -198,17 +227,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                                                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                                             >
                                                 {isFav ? (
-                                                    <span style={{ color: '#fbbf24', fontSize: '0.78rem', lineHeight: 1, width: '6px', marginLeft: '-1px', flexShrink: 0 }}>★</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: '0.85rem', lineHeight: 1, width: '6px', marginLeft: '-1px', flexShrink: 0 }}>★</span>
                                                 ) : (
                                                     <span style={{
-                                                        width: '4px',
-                                                        height: '4px',
+                                                        width: '5px',
+                                                        height: '5px',
                                                         borderRadius: '50%',
                                                         backgroundColor: 'var(--primary-color)',
                                                         flexShrink: 0,
                                                     }} />
                                                 )}
-                                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{etf.name}</span>
+                                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stripBrand(etf.name)}</span>
                                                 {(etf as any).isUserAdded && (
                                                     <span style={{
                                                         fontSize: '0.55rem',
@@ -299,13 +328,24 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                         {g.etfs.map((e) => {
                             const info = etfNameMap.get(e.etfCode);
+                            const isSel = selected.has(e.etfCode);
+                            const atMax = !isSel && selected.size >= MAX_COMPARE;
                             return (
-                                <li key={e.etfCode}>
+                                <li key={e.etfCode} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={isSel}
+                                        disabled={atMax}
+                                        onChange={() => toggleSelect(e.etfCode)}
+                                        title={atMax ? `비교는 최대 ${MAX_COMPARE}개까지 선택` : '비교 대상으로 선택'}
+                                        style={{ flexShrink: 0, cursor: atMax ? 'not-allowed' : 'pointer', accentColor: 'var(--primary-color)' }}
+                                    />
                                     <button
                                         onClick={() => onSelectEtf(e.etfCode)}
                                         title={`${info?.name ?? e.etfCode} (${shortDate(e.date)})`}
                                         style={{
-                                            width: '100%',
+                                            flex: 1,
+                                            minWidth: 0,
                                             textAlign: 'left',
                                             padding: '3px 6px',
                                             background: 'transparent',
@@ -335,6 +375,44 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites }) => {
                     </ul>
                 </div>
             ))}
+
+            {selected.size > 0 && (
+                <div style={{
+                    position: 'sticky',
+                    bottom: 0,
+                    marginTop: 'auto',
+                    background: 'var(--sidebar-bg, #1a1a1a)',
+                    borderTop: '1px solid rgba(255,255,255,0.12)',
+                    padding: '8px 2px 2px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.66rem', color: 'var(--secondary-color)' }}>
+                        <span>비교 선택 {selected.size} / {MAX_COMPARE}</span>
+                        <button
+                            onClick={() => setSelected(new Set())}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--secondary-color)', cursor: 'pointer', fontSize: '0.66rem', textDecoration: 'underline' }}
+                        >해제</button>
+                    </div>
+                    <button
+                        onClick={runCompare}
+                        disabled={selected.size < 2}
+                        title={selected.size < 2 ? '2개 이상 선택하면 비교할 수 있습니다' : '선택한 ETF 구성 비교'}
+                        style={{
+                            width: '100%',
+                            padding: '7px',
+                            background: selected.size < 2 ? 'rgba(255,255,255,0.08)' : 'var(--primary-color)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: selected.size < 2 ? 'var(--secondary-color)' : '#fff',
+                            cursor: selected.size < 2 ? 'default' : 'pointer',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                        }}
+                    >📊 선택 ETF 비교</button>
+                </div>
+            )}
         </div>
     );
 

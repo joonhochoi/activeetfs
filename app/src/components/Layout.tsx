@@ -16,11 +16,12 @@ interface LayoutProps {
     rightPanel?: React.ReactNode;
     favorites?: Set<string>;
     onSelectEtf: (etfCode: string) => void;
+    onCompareEtfs?: (codes: string[]) => void;
     isChangelogOpen: boolean;
     setIsChangelogOpen: (open: boolean) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favorites, isChangelogOpen, setIsChangelogOpen }) => {
+const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, onCompareEtfs, favorites, isChangelogOpen, setIsChangelogOpen }) => {
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = React.useState(true);
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -213,6 +214,7 @@ const Layout: React.FC<LayoutProps> = ({ children, rightPanel, onSelectEtf, favo
                     <Sidebar
                         key={sidebarKey}
                         onSelectEtf={onSelectEtf}
+                        onCompareEtfs={onCompareEtfs}
                         favorites={favorites}
                     />
                 </div>

@@ -68,6 +68,13 @@ function App() {
         }
     };
 
+    // 검색 탭에서 선택한 ETF들의 구성 비교.
+    // TODO: 메인 차트뷰 영역에 다중 ETF 비교 뷰 구현 후 연결. (현재는 진입점만 마련)
+    const handleCompareEtfs = (codes: string[]) => {
+        console.log('compare ETFs:', codes);
+        window.alert(`선택한 ${codes.length}개 ETF 비교 뷰는 다음 단계에서 메인 화면에 추가됩니다.\n(${codes.join(', ')})`);
+    };
+
     const [hash, setHash] = useState(window.location.hash);
 
     useEffect(() => {
@@ -91,6 +98,7 @@ function App() {
     return (
         <Layout
             onSelectEtf={setSelectedEtf}
+            onCompareEtfs={handleCompareEtfs}
             rightPanel={rightPanelContent}
             favorites={favorites}
             isChangelogOpen={isChangelogOpen}
