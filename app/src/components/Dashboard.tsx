@@ -124,16 +124,24 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         return m;
     }, [holdings]);
 
-    // Series Names
-    const seriesNames = useMemo(() => {
-        if (!holdings.length) return [];
-        const dates = Array.from(new Set(holdings.map(h => h.date))).sort();
-        const relevantDates = dates.filter(d => {
+    // 차트에 표시할 날짜 목록: 선택한 View 범위(viewStartDate~viewEndDate)로 필터.
+    // 단, 그 범위에 데이터가 전혀 없으면(종목 데이터가 범위 밖) 빈 차트를 피하기 위해
+    // 해당 종목 전체 데이터로 폴백한다. 이렇게 하면 범위는 종목 전환에도 유지되면서,
+    // 데이터가 범위보다 짧거나 어긋나도 실제 데이터 기간이 차트 제목에 표기된다.
+    const relevantDates = useMemo(() => {
+        const all = Array.from(new Set(holdings.map(h => h.date))).sort();
+        const filtered = all.filter(d => {
             const dDate = new Date(d);
             if (viewStartDate && dDate < viewStartDate) return false;
             if (viewEndDate && dDate > viewEndDate) return false;
             return true;
         });
+        return filtered.length > 0 ? filtered : all;
+    }, [holdings, viewStartDate, viewEndDate]);
+
+    // Series Names
+    const seriesNames = useMemo(() => {
+        if (!holdings.length) return [];
         if (relevantDates.length === 0) return [];
 
         // Create a map of Stock -> Max Weight in this period for sorting
@@ -155,7 +163,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             .sort((a, b) => (stockMaxWeights.get(b) || 0) - (stockMaxWeights.get(a) || 0));
 
         return sortedStocks.slice(0, parseInt(topN === 'all' ? '100' : topN));
-    }, [holdings, topN, viewStartDate, viewEndDate]);
+    }, [holdings, topN, relevantDates]);
 
     const toggleSeries = (name: string) => {
         setHiddenSeries(prev => {
@@ -343,15 +351,18 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
                     setSelectedTableDate(lastDate);
                     setAvailableDataDates(new Set(dates));
 
-                    // Set default view range to recent (e.g., last 1 month)
-                    setViewEndDate(new Date(lastDate));
-                    if (dates.length > 0) {
+                    // 차트 범위(View Start~End)는 종목을 전환해도 사용자가 지정한 값을 유지한다.
+                    // 최초 1회(아직 설정 안 됨)에만 기본값(최근 ~1주)을 채운다.
+                    // 종목 데이터가 지정 범위보다 짧아도, 차트 상단 제목에는 실제 데이터 기간이
+                    // 표기된다(아래 chartOption의 relevantDates 기준).
+                    setViewEndDate(prev => prev ?? new Date(lastDate));
+                    setViewStartDate(prev => {
+                        if (prev) return prev;
                         const first = new Date(dates[0]);
-                        // logic to set start date to ~1 week ago if possible, else first date
                         const oneWeekAgo = new Date(lastDate);
                         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-                        setViewStartDate(oneWeekAgo < first ? first : oneWeekAgo);
-                    }
+                        return oneWeekAgo < first ? first : oneWeekAgo;
+                    });
                 }
             }
         } catch (error) {
@@ -529,14 +540,6 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     const canSplit = useMemo(() => {
         if (!holdings.length) return false;
 
-        const dates = Array.from(new Set(holdings.map(h => h.date))).sort();
-        const relevantDates = dates.filter(d => {
-            const dDate = new Date(d);
-            if (viewStartDate && dDate < viewStartDate) return false;
-            if (viewEndDate && dDate > viewEndDate) return false;
-            return true;
-        });
-
         const relevantDatesSet = new Set(relevantDates);
         const seriesNamesSet = new Set(seriesNames);
         const visibleWeights: number[] = [];
@@ -554,7 +557,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
         }
 
         return maxGap > 5;
-    }, [holdings, viewStartDate, viewEndDate, seriesNames, hiddenSeries]);
+    }, [holdings, relevantDates, seriesNames, hiddenSeries]);
 
     // Auto-disable expanded mode when split becomes impossible
     useEffect(() => {
@@ -566,14 +569,6 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
     // Calculate Chart Data
     const chartOption = useMemo(() => {
         if (!holdings.length) return {};
-
-        const dates = Array.from(new Set(holdings.map(h => h.date))).sort();
-        const relevantDates = dates.filter(d => {
-            const dDate = new Date(d);
-            if (viewStartDate && dDate < viewStartDate) return false;
-            if (viewEndDate && dDate > viewEndDate) return false;
-            return true;
-        });
 
         const titleText = `Top ${topN === 'all' ? 'All' : topN} : ${relevantDates[0] || ''} ~ ${relevantDates[relevantDates.length - 1] || ''}`;
         const seriesNamesSet = new Set(seriesNames);
@@ -750,7 +745,7 @@ const Dashboard: React.FC<DashboardProps> = ({ etfCode, setRightPanelContent, fa
             }),
             color: COLOR_PALETTE
         };
-    }, [holdings, holdingsByDateName, topN, viewStartDate, viewEndDate, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete, isExpanded, splitRatio]);
+    }, [holdings, holdingsByDateName, topN, relevantDates, seriesNames, hiddenSeries, highlightedSeries, initialAnimationComplete, isExpanded, splitRatio]);
 
     // Right Sidebar Logic
     useEffect(() => {
