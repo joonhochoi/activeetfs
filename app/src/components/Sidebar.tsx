@@ -194,7 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
                             style={{
                                 width: '100%',
                                 textAlign: 'left',
-                                background: '#172554',
+                                background: '#1e3a8a',
                                 border: 'none',
                                 color: '#fff',
                                 cursor: 'pointer',
