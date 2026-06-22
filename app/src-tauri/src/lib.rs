@@ -32,6 +32,7 @@ pub fn run(context: tauri::Context) {
             commands::check_holdings_exist,
             commands::get_latest_date_before,
             commands::get_holdings_by_date,
+            commands::get_latest_holdings,
             commands::get_changelog,
             commands::check_and_update_version,
             commands::get_etf_enabled_list,

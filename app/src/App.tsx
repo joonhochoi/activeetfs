@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import CompareView from './components/CompareView';
 import UpdateAllWindow from './components/UpdateAllWindow';
 import UpdateTodayWindow from './components/UpdateTodayWindow';
 import SelectEtfsWindow from './components/SelectEtfsWindow';
@@ -14,6 +15,8 @@ function App() {
     const [rightPanelContent, setRightPanelContent] = useState<React.ReactNode>(null);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
     const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+    // 검색 탭에서 선택한 ETF 비교(메인 뷰에 차트 대신 표시). null이면 일반 대시보드.
+    const [compareState, setCompareState] = useState<{ codes: string[]; highlight: string[] } | null>(null);
 
     useEffect(() => {
         // Fetch favorites on init
@@ -68,11 +71,16 @@ function App() {
         }
     };
 
-    // 검색 탭에서 선택한 ETF들의 구성 비교.
-    // TODO: 메인 차트뷰 영역에 다중 ETF 비교 뷰 구현 후 연결. (현재는 진입점만 마련)
-    const handleCompareEtfs = (codes: string[]) => {
-        console.log('compare ETFs:', codes);
-        window.alert(`선택한 ${codes.length}개 ETF 비교 뷰는 다음 단계에서 메인 화면에 추가됩니다.\n(${codes.join(', ')})`);
+    // 검색 탭에서 선택한 ETF들의 구성을 메인 뷰에서 비교한다.
+    const handleCompareEtfs = (codes: string[], highlight: string[] = []) => {
+        setRightPanelContent(null); // 비교 모드에서는 우측 패널 비움
+        setCompareState({ codes, highlight });
+    };
+
+    // 사이드바에서 개별 ETF를 고르면 비교 모드를 해제하고 일반 대시보드로 전환.
+    const handleSelectEtf = (code: string) => {
+        setCompareState(null);
+        setSelectedEtf(code);
     };
 
     const [hash, setHash] = useState(window.location.hash);
@@ -97,19 +105,27 @@ function App() {
 
     return (
         <Layout
-            onSelectEtf={setSelectedEtf}
+            onSelectEtf={handleSelectEtf}
             onCompareEtfs={handleCompareEtfs}
             rightPanel={rightPanelContent}
             favorites={favorites}
             isChangelogOpen={isChangelogOpen}
             setIsChangelogOpen={setIsChangelogOpen}
         >
-            <Dashboard
-                etfCode={selectedEtf}
-                setRightPanelContent={setRightPanelContent}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-            />
+            {compareState ? (
+                <CompareView
+                    codes={compareState.codes}
+                    highlightStocks={compareState.highlight}
+                    onClose={() => setCompareState(null)}
+                />
+            ) : (
+                <Dashboard
+                    etfCode={selectedEtf}
+                    setRightPanelContent={setRightPanelContent}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
+                />
+            )}
         </Layout>
     );
 }

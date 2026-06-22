@@ -16,7 +16,7 @@ interface LayoutProps {
     rightPanel?: React.ReactNode;
     favorites?: Set<string>;
     onSelectEtf: (etfCode: string) => void;
-    onCompareEtfs?: (codes: string[]) => void;
+    onCompareEtfs?: (codes: string[], highlight: string[]) => void;
     isChangelogOpen: boolean;
     setIsChangelogOpen: (open: boolean) => void;
 }

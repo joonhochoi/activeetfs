@@ -140,6 +140,29 @@ pub async fn get_holdings_by_date(
     Ok(rows)
 }
 
+/// 특정 ETF의 가장 최근 보유일 종목 구성을 비중 내림차순으로 반환한다. (ETF 비교 뷰용)
+#[tauri::command]
+pub async fn get_latest_holdings(
+    state: tauri::State<'_, AppState>,
+    etf_code: String,
+) -> Result<Vec<Holding>, String> {
+    let rows = sqlx::query_as::<_, Holding>(
+        r#"
+        SELECT date, etf_code, stock_code, stock_name as "name", weight, quantity, price
+        FROM holdings
+        WHERE etf_code = ?1
+          AND date = (SELECT MAX(date) FROM holdings WHERE etf_code = ?1)
+        ORDER BY weight DESC
+        "#
+    )
+    .bind(&etf_code)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(rows)
+}
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct EtfSetting {

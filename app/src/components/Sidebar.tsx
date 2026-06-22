@@ -12,11 +12,11 @@ interface UserEtf {
 interface SidebarProps {
     onSelectEtf: (code: string) => void;
     favorites?: Set<string>;
-    onCompareEtfs?: (codes: string[]) => void;
+    onCompareEtfs?: (codes: string[], highlight: string[]) => void;
 }
 
 // 비교 뷰에서 동시에 볼 수 있는 ETF 최대 개수
-const MAX_COMPARE = 4;
+const MAX_COMPARE = 5;
 
 interface StockSearchRow {
     stockCode: string;
@@ -48,6 +48,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
     const [searchError, setSearchError] = useState<string | null>(null);
     // 비교용 선택(검색 결과 ETF code 집합)
     const [selected, setSelected] = useState<Set<string>>(new Set());
+    // 검색으로 찾은 종목코드 누적(비교 뷰에서 강조 표시용)
+    const [searchedStocks, setSearchedStocks] = useState<Set<string>>(new Set());
 
     const fetchEnabledCodes = () => {
         invoke<{ code: string; isEnabled: boolean }[]>('get_etf_enabled_list')
@@ -121,6 +123,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
             // 보유 ETF 수가 많은 종목을 위로
             groups.sort((a, b) => b.etfs.length - a.etfs.length || a.stockName.localeCompare(b.stockName));
             setSearchResults(groups);
+            // 검색으로 찾은 종목코드를 누적(비교 뷰 강조용)
+            if (groups.length > 0) {
+                setSearchedStocks(prev => {
+                    const next = new Set(prev);
+                    groups.forEach(g => next.add(g.stockCode));
+                    return next;
+                });
+            }
         } catch (e: any) {
             setSearchError(typeof e === 'string' ? e : (e?.message ?? '검색 실패'));
             setSearchResults(null);
@@ -146,7 +156,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
 
     const runCompare = () => {
         if (selected.size < 2) return;
-        onCompareEtfs?.(Array.from(selected));
+        onCompareEtfs?.(Array.from(selected), Array.from(searchedStocks));
+    };
+
+    const clearSelection = () => {
+        setSelected(new Set());
+        setSearchedStocks(new Set());
     };
 
     // ── List 탭 ───────────────────────────────────────────────────────────
@@ -179,22 +194,31 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
                             style={{
                                 width: '100%',
                                 textAlign: 'left',
-                                background: 'transparent',
+                                background: 'var(--primary-color)',
                                 border: 'none',
-                                color: 'var(--secondary-color)',
+                                color: '#fff',
                                 cursor: 'pointer',
-                                padding: '4px 6px',
+                                padding: '5px 8px',
+                                borderRadius: '6px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px',
-                                fontSize: '0.72rem',
+                                fontSize: '0.74rem',
                                 letterSpacing: '0.3px',
                                 fontWeight: 700,
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
                             }}
                         >
-                            <span style={{ fontSize: '0.58rem', opacity: 0.7, width: '8px' }}>{isExpanded ? '▼' : '▶'}</span>
+                            <span style={{ fontSize: '0.58rem', opacity: 0.85, width: '8px' }}>{isExpanded ? '▼' : '▶'}</span>
                             <span style={{ flex: 1 }}>{brand}</span>
-                            <span style={{ opacity: 0.5, fontWeight: 500 }}>{visibleEtfs.length}</span>
+                            <span style={{
+                                fontSize: '0.66rem',
+                                fontWeight: 700,
+                                padding: '0 6px',
+                                borderRadius: '9px',
+                                background: 'rgba(255,255,255,0.25)',
+                                color: '#fff',
+                            }}>{visibleEtfs.length}</span>
                         </button>
 
                         {isExpanded && (
@@ -391,7 +415,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSelectEtf, favorites, onCompareEtfs
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.66rem', color: 'var(--secondary-color)' }}>
                         <span>비교 선택 {selected.size} / {MAX_COMPARE}</span>
                         <button
-                            onClick={() => setSelected(new Set())}
+                            onClick={clearSelection}
                             style={{ background: 'transparent', border: 'none', color: 'var(--secondary-color)', cursor: 'pointer', fontSize: '0.66rem', textDecoration: 'underline' }}
                         >해제</button>
                     </div>
